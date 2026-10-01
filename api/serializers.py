@@ -1,28 +1,27 @@
 """
-Los Serializadores sirven para convertir la información de la Base de Datos (PostgreSQL)
-a un formato fácil de leer por internet (formato JSON), y viceversa.
+Serializadores DRF. Gestionan la conversión de objetos de la base de datos a JSON
+y manejan la inyección de claims personalizados en los tokens JWT.
 """
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    # Personalizamos el Token JWT de inicio de sesión
+    # Personalización del payload del Token JWT
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        # Aquí inyectamos el ROL del usuario dentro del token de forma encriptada
+        # Inyección del rol del usuario para el control de accesos frontend/backend
         token['rol'] = user.rol
         return token
 
 class MaquinariaSerializer(serializers.ModelSerializer):
-    # Serializador básico para ver y crear máquinas
     class Meta:
         model = Maquinaria
         fields = '__all__'
 
 class ItemCarroSerializer(serializers.ModelSerializer):
-    # Campos que el sistema calcula solo, el cliente no los puede editar
+    # Definición de campos de solo lectura calculados a nivel de modelo
     costo_calculado = serializers.ReadOnlyField()
     dias_arriendo = serializers.ReadOnlyField()
 
@@ -31,13 +30,13 @@ class ItemCarroSerializer(serializers.ModelSerializer):
         fields = ['id', 'maquinaria', 'fecha_inicio', 'fecha_fin', 'costo_calculado', 'dias_arriendo']
 
     def validate(self, data):
-        # Evitamos que el cliente ponga una fecha de inicio que sea después de la fecha de fin
+        # Validación de coherencia temporal en las fechas de arriendo
         if data['fecha_inicio'] >= data['fecha_fin']:
             raise serializers.ValidationError("La fecha de inicio debe ser anterior a la fecha de fin.")
         return data
 
 class CarroSerializer(serializers.ModelSerializer):
-    # Un carro tiene muchos "ítems" adentro. Aquí los mostramos todos.
+    # Relación anidada para exponer los ítems del carro
     items = ItemCarroSerializer(many=True, read_only=True)
 
     class Meta:

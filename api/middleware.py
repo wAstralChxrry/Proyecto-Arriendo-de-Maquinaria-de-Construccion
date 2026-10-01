@@ -1,17 +1,16 @@
 """
-El 'Middleware' es un código que funciona como una "aduana". 
-Se ejecuta siempre que entra una petición al servidor o cuando sale una respuesta.
+Middleware para la inyección de metadatos de autoría en las respuestas HTTP.
+Intercepta todas las peticiones y añade cabeceras personalizadas.
 """
 class FooterMetadataMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Primero dejamos que el servidor procese la petición de forma normal
+        # Procesamiento normal de la petición
         response = self.get_response(request)
         
-        # Una vez que tenemos la respuesta, le "inyectamos" tus datos como estudiante
-        # de forma permanente. Esto aparecerá en las cabeceras (Headers) de todas las respuestas.
+        # Inyección de metadatos del desarrollador en las cabeceras (Headers)
         response['X-Student-Name'] = 'Maximo Agusto Aldea Garrido'
         response['X-Student-Section'] = 'IEC-N4-C1'
         response['X-Student-Year'] = '2 año'

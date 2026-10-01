@@ -1,6 +1,6 @@
-# Guía y Explicación del Proyecto: Arriendo de Maquinaria
+# Documentación del Proyecto: API Arriendo de Maquinaria
 
-Hola, esta guía está hecha para que puedas entender y explicar tu proyecto de forma sencilla. El objetivo de este sistema es permitir que **Empresas Constructoras** (Clientes) arrienden **Maquinaria**, y que los **Ejecutivos** (Administradores) gestionen ese inventario.
+El objetivo de este sistema es permitir que **Empresas Constructoras** (Clientes) arrienden **Maquinaria**, y que los **Ejecutivos** (Administradores) gestionen el inventario y las transacciones.
 
 **Desarrollador:** Máximo Agusto Aldea Garrido  
 **Sección:** IEC-N4-C1  
@@ -8,56 +8,44 @@ Hola, esta guía está hecha para que puedas entender y explicar tu proyecto de 
 
 ---
 
-## 1. ¿Cómo funciona la Base de Datos y los Roles?
-El proyecto usa **PostgreSQL**. Tenemos dos tipos de usuarios (roles) guardados en la base de datos:
-- **Cliente (Empresa Constructora):** Puede ver maquinarias, agregarlas a su carrito de compras y "pagar" (crear un contrato).
-- **Admin (Ejecutivo de Arriendos):** Puede crear maquinarias nuevas, editar su precio/stock y cambiar el estado de los contratos (por ejemplo, marcarlos como PAGADOS).
+## 1. Arquitectura de Base de Datos y Roles
+El proyecto utiliza **PostgreSQL** como motor de base de datos relacional. El sistema contempla dos tipos de usuarios (roles) principales:
+- **Cliente (Empresa Constructora):** Tiene permisos para visualizar maquinarias, gestionar su carro de compras y generar contratos (checkout).
+- **Administrador (Ejecutivo de Arriendos):** Tiene privilegios para crear maquinarias nuevas, editar su precio o stock, y actualizar el estado de los contratos generados.
 
-## 2. ¿Qué pasa con el Carrito de Compras?
-A diferencia de otros sistemas donde el carrito se borra si cierras la ventana, aquí **el carrito es persistente**.
-- Si un Cliente agrega una excavadora al carrito y cierra sesión, la excavadora sigue en su carrito cuando vuelva a entrar. 
-- Esto se logró conectando directamente el "Carro" al "Usuario" en la base de datos de forma permanente.
+## 2. Persistencia del Carro de Compras
+A diferencia de implementaciones basadas en sesiones temporales, este sistema cuenta con un **carro de compras persistente**.
+- Si un Cliente agrega un ítem al carrito y finaliza su sesión, los ítems agregados previamente se conservan intactos en la base de datos al volver a conectarse.
+- Esto se logra mediante una relación uno a uno (`OneToOneField`) entre la entidad `Usuario` y la entidad `Carro`.
 
-## 3. ¿Cómo se descuenta el Stock? (La Lógica del Negocio)
-Este es el punto más importante que debes explicar:
-1. Cuando el Cliente añade algo al carrito, **el stock NO se descuenta**.
-2. Cuando el Cliente le da a "Checkout" (Confirmar compra), el sistema verifica si hay stock libre. Si lo hay, vacía el carrito y crea un "Contrato" en estado **PENDIENTE**. (El stock sigue sin descontarse aquí).
-3. **El stock SÓLO se descuenta cuando el Ejecutivo (Admin) cambia el contrato al estado "PAGADO"**.
-4. Si por alguna razón el contrato se cancela o se devuelve la máquina, el sistema **devuelve automáticamente la máquina al stock disponible**.
+## 3. Reglas de Negocio y Flujo de Inventario
+El sistema maneja el stock de manera transaccional para garantizar la integridad de los datos:
+1. Al momento de añadir un producto al carro, **el stock no sufre descuentos**.
+2. Al ejecutar el "Checkout" (Confirmar compra), el sistema verifica la disponibilidad de stock. Si la validación es exitosa, se vacía el carrito y se genera un "Contrato" en estado **PENDIENTE**. (El stock físico se mantiene intacto en esta fase).
+3. **El stock se descuenta únicamente** cuando el Ejecutivo (Administrador) actualiza el contrato al estado **PAGADO**.
+4. Si un contrato cambia a estado **CANCELADO** o **COMPLETADO** (devolución del equipo), el sistema **repone automáticamente** el stock de la máquina al inventario disponible.
 
-## 4. ¿Cómo probarlo para tu presentación? (Paso a paso)
+## 4. Instrucciones de Uso y Pruebas (Swagger / OpenAPI)
 
-Para mostrar el proyecto, usa **Swagger** (la pantalla interactiva donde ves todos los rectángulos azules y verdes). Entra a: 👉 `http://127.0.0.1:8000/api/docs/`
+Para interactuar con la API, el sistema provee una interfaz gráfica generada automáticamente mediante OpenAPI (Swagger).
+**URL de acceso:** `http://127.0.0.1:8000/api/docs/`
 
-**Paso A: Demuestra que es seguro (Error 401)**
-- Intenta crear una maquinaria en el `POST /api/maquinarias/` sin estar logueado.
-- *Qué decir:* "El sistema está protegido. Si no estoy logueado, me da error 401 (No autorizado)."
+### A. Seguridad y Autenticación (JWT)
+El sistema está protegido mediante JSON Web Tokens (JWT). El token inyecta el *claim* del rol del usuario (`CLIENTE` o `ADMIN`).
+- Para obtener un token, se debe consumir el endpoint `POST /api/token/` ingresando credenciales válidas.
+- En la interfaz de Swagger, el token de acceso obtenido ("access") debe ingresarse en el botón superior **Authorize** para desbloquear los endpoints protegidos.
+- Las consultas a endpoints protegidos sin proveer un token retornarán un error HTTP `401 Unauthorized`.
 
-**Paso B: Inicia sesión (Obtener el Token)**
-- Ve a `POST /api/token/`, pon tu usuario y clave y ejecútalo.
-- Copia el texto largo que dice "access".
-- Sube arriba del todo, dale al botón verde **Authorize**, pega el token y bloquea el candado.
-- *Qué decir:* "El sistema usa Tokens (JWT) para la seguridad. Este token lleva escondido mi rol (si soy Cliente o Admin)."
+### B. Gestión de Catálogo y Carro
+- **Creación de Maquinarias:** `POST /api/maquinarias/` (Requiere autenticación de Administrador).
+- **Agregar al Carro:** `POST /api/carro-arriendo/` especificando el ID de la máquina, `fecha_inicio` y `fecha_fin`.
+- **Procesamiento (Checkout):** `POST /api/contratos/checkout/` calcula el costo total (días de arriendo * tarifa diaria + garantía fija) y genera el contrato formal.
 
-**Paso C: Crea una Maquinaria**
-- Vuelve a `POST /api/maquinarias/` y ahora sí, crea una máquina con stock 2.
-- *Qué decir:* "Como estoy autenticado como Administrador, ahora sí me deja crear inventario."
+### C. Actualización de Estados
+- **Modificación de Contrato:** `PATCH /api/contratos/{id}/estado/` (Requiere autenticación de Administrador). Modificar el estado a `"PAGADO"` ejecutará la validación y el descuento atómico de inventario.
 
-**Paso D: Muestra el Carrito y la Compra**
-- Simula que eres el cliente: Ve a `POST /api/carro-arriendo/` y agrega la máquina al carrito indicando fecha de inicio y fin.
-- Ve a `POST /api/contratos/checkout/` y ejecútalo para "Confirmar".
-- *Qué decir:* "El sistema calculó el total automáticamente multiplicando los días por el precio y le sumó la garantía. El contrato está PENDIENTE."
-
-**Paso E: El Descuento de Stock**
-- Ve a `PATCH /api/contratos/1/estado/` y cámbialo a `PAGADO`.
-- Muestra de nuevo el catálogo en `GET /api/maquinarias/`.
-- *Qué decir:* "Al pasar el contrato a PAGADO, el sistema fue a la base de datos y le restó 1 al stock de la máquina de forma automática."
-
-## 5. El Sello de Autoría (Tus datos en cada respuesta)
-Para cumplir con las normas de la prueba, creaste un "Middleware".
-- Abre cualquier respuesta exitosa o de error en Swagger y baja a la sección negra que dice **Response headers** (Cabeceras de respuesta).
-- Ahí siempre estarán tus datos:
-  - `x-student-name: Maximo Agusto Aldea Garrido`
-  - `x-student-section: IEC-N4-C1`
-  - `x-student-year: 2 año`
-- *Qué decir:* "Creé un código que se ejecuta en absolutamente todas las respuestas del servidor para inyectar mis datos de estudiante de forma permanente."
+## 5. Middleware de Autoría (Sello Estudiantil)
+Para el cumplimiento de las normativas de desarrollo, se ha implementado un componente interceptor (`FooterMetadataMiddleware`). Este middleware inyecta permanentemente en las cabeceras de todas las respuestas HTTP emitidas por el servidor (Response Headers) los datos de autoría:
+- `X-Student-Name: Maximo Agusto Aldea Garrido`
+- `X-Student-Section: IEC-N4-C1`
+- `X-Student-Year: 2 año`
