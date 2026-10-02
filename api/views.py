@@ -1,6 +1,6 @@
 """
-Aquí están las 'Vistas' (Endpoints). Es la lógica principal del sistema.
-Reciben peticiones web y deciden qué hacer con la base de datos.
+Vistas de la API (ViewSets). Contienen la lógica principal del sistema.
+Gestionan las peticiones HTTP, aplican permisos y ejecutan operaciones sobre la base de datos.
 """
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
@@ -11,38 +11,38 @@ from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato
 from .serializers import MaquinariaSerializer, CarroSerializer, ItemCarroSerializer, ContratoSerializer
 
 class IsEjecutivo(permissions.BasePermission):
-    # Permiso de seguridad: Solo deja pasar si el usuario es 'ADMIN' o un Superusuario.
+    # Permiso personalizado (RBAC): permite el acceso únicamente a usuarios con rol ADMIN o con permisos de superusuario.
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and (request.user.rol == 'ADMIN' or request.user.is_superuser))
 
 class MaquinariaViewSet(viewsets.ModelViewSet):
-    # Punto de acceso para el catálogo de máquinas
+    # Endpoint para la gestión del catálogo de maquinarias
     queryset = Maquinaria.objects.all()
     serializer_class = MaquinariaSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['categoria', 'tarifa_diaria']
 
     def get_permissions(self):
-        # Si alguien solo quiere "ver" el catálogo (list) se permite a cualquiera.
-        if self.action == 'list' or self.action == 'retrieve':
+        # Las operaciones de lectura (list, retrieve) son públicas y no requieren autenticación
+        if self.action in ['list', 'retrieve']:
             permission_classes = [permissions.AllowAny]
         else:
-            # Si alguien quiere crear, editar o borrar una máquina, DEBE ser Ejecutivo (Admin).
+            # Las operaciones de escritura (create, update, delete) requieren rol de Ejecutivo (Admin)
             permission_classes = [IsEjecutivo]
         return [permission() for permission in permission_classes]
 
 class CarroViewSet(viewsets.ViewSet):
-    # Controla el carrito de compras. Solo usuarios logueados pueden usarlo.
+    # Endpoint para la gestión del carro de compras. Requiere autenticación.
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request):
-        # Busca el carrito persistente del usuario, si no tiene, le crea uno nuevo.
+        # Retorna el carro persistente del usuario. Si no existe, lo crea automáticamente.
         carro, created = Carro.objects.get_or_create(usuario=request.user)
         serializer = CarroSerializer(carro)
         return Response(serializer.data)
 
     def create(self, request):
-        # Añadir un nuevo producto al carrito
+        # Agrega un nuevo ítem (maquinaria) al carro del usuario autenticado
         carro, _ = Carro.objects.get_or_create(usuario=request.user)
         serializer = ItemCarroSerializer(data=request.data)
         if serializer.is_valid():
@@ -51,7 +51,7 @@ class CarroViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def destroy(self, request, pk=None):
-        # Eliminar una máquina del carrito
+        # Elimina un ítem específico del carro del usuario autenticado
         try:
             item = ItemCarro.objects.get(pk=pk, carro__usuario=request.user)
             item.delete()
@@ -60,26 +60,26 @@ class CarroViewSet(viewsets.ViewSet):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 class ContratoViewSet(viewsets.ModelViewSet):
-    # Gestiona las compras (Contratos). Solo usuarios logueados.
+    # Endpoint para la gestión de contratos. Requiere autenticación.
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ContratoSerializer
 
     def get_queryset(self):
-        # Un Ejecutivo puede ver TODOS los contratos. El Cliente solo ve los suyos.
+        # Los Administradores visualizan todos los contratos; los Clientes solo los propios
         if self.request.user.rol == 'ADMIN' or self.request.user.is_superuser:
             return Contrato.objects.all()
         return Contrato.objects.filter(usuario=self.request.user)
 
     @action(detail=False, methods=['post'])
     def checkout(self, request):
-        # 'Checkout' es cuando el Cliente le da a "Confirmar Compra".
+        # Procesa el carro activo y genera un contrato formal en estado PENDIENTE
         carro = Carro.objects.filter(usuario=request.user).first()
         if not carro or not carro.items.exists():
             return Response({"error": "El carro está vacío."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # transaction.atomic() sirve para que si algo falla, no se guarde nada a medias (seguridad).
+        # transaction.atomic() garantiza que la operación sea atómica: si ocurre un error, se revierten todos los cambios
         with transaction.atomic():
-            # 1. Validamos que las máquinas que quiere tengan stock libre.
+            # Validación previa de disponibilidad de stock por cada ítem del carro
             for item in carro.items.all():
                 if item.maquinaria.stock_disponible < 1:
                     return Response(
@@ -87,11 +87,11 @@ class ContratoViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-            # 2. Sumamos todo el dinero y creamos el Contrato en estado PENDIENTE.
+            # Cálculo del total y creación del contrato
             total = sum([item.costo_calculado for item in carro.items.all()])
             contrato = Contrato.objects.create(usuario=request.user, total=total, estado='PENDIENTE')
 
-            # 3. Guardamos los detalles de las máquinas arrendadas.
+            # Registro del detalle de cada máquina arrendada en el contrato
             for item in carro.items.all():
                 DetalleContrato.objects.create(
                     contrato=contrato,
@@ -101,31 +101,28 @@ class ContratoViewSet(viewsets.ModelViewSet):
                     subtotal=item.costo_calculado
                 )
             
-            # 4. Vaciamos el carrito del cliente. (¡OJO! El stock NO se ha descontado aún).
+            # Liquidación del carro. El stock físico no se descuenta en esta etapa.
             carro.items.all().delete()
             return Response(ContratoSerializer(contrato).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsEjecutivo])
     def estado(self, request, pk=None):
-        # Cambiar el estado del contrato. SOLO puede hacerlo el Ejecutivo (IsEjecutivo).
+        # Actualiza el estado de un contrato. Operación restringida al rol Ejecutivo (Admin).
         contrato = self.get_object()
         nuevo_estado = request.data.get('estado')
         
         with transaction.atomic():
-            # Si el Ejecutivo marca que el cliente ya PAGÓ:
+            # Al transición a PAGADO: se verifica stock y se descuenta el inventario físico
             if nuevo_estado == 'PAGADO' and contrato.estado == 'PENDIENTE':
                 for detalle in contrato.detalles.all():
                     if detalle.maquinaria.stock_disponible < 1:
                         return Response({"error": f"Stock insuficiente para {detalle.maquinaria.nombre}."}, status=status.HTTP_400_BAD_REQUEST)
-                    
-                    # ¡AQUÍ descontamos el stock físico del catálogo!
                     detalle.maquinaria.stock_disponible -= 1
                     detalle.maquinaria.save()
 
-            # Si el Ejecutivo CANCELA el contrato o lo da por COMPLETADO (ya devolvieron la máquina):
+            # Al transición a CANCELADO o COMPLETADO: se repone el stock al inventario
             elif nuevo_estado in ['CANCELADO', 'COMPLETADO'] and contrato.estado in ['PAGADO', 'ENTREGADO']:
                 for detalle in contrato.detalles.all():
-                    # ¡AQUÍ devolvemos el stock físico al catálogo!
                     detalle.maquinaria.stock_disponible += 1
                     detalle.maquinaria.save()
 
