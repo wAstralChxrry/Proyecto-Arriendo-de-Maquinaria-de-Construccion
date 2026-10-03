@@ -79,11 +79,11 @@ WSGI_APPLICATION = 'renting_maquinaria.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'renting_db',
-        'USER': 'postgres',
-        'PASSWORD': 'password_seguro',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('DB_NAME', 'renting_db'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'admin123'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -151,6 +151,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# Archivos estáticos del frontend (style.css, app.js, etc.)
+STATICFILES_DIRS = [
+    BASE_DIR / 'frontend',
+]
 
 
 # Email

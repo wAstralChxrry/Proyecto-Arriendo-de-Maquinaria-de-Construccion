@@ -6,33 +6,55 @@ Backend REST API construida con Django REST Framework, PostgreSQL y autenticaci�
 
 ---
 
-##  Inicio Rápido
+## Inicio Rápido
 
 ### Prerrequisitos
 - Python 3.x instalado
 - PostgreSQL instalado y ejecutándose
-- Base de datos `renting_db` creada con usuario `postgres` / contraseña `password_seguro`
+- Base de datos `renting_db` creada con usuario `postgres`
 
-### 1. Activar el entorno e instalar dependencias
+### 1. Crear entorno virtual e instalar dependencias
 ```powershell
+python -m venv venv
 .\venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Migrar la base de datos
+### 2. Configurar la base de datos
+
+Crear la base de datos en PostgreSQL (desde psql o pgAdmin):
+```sql
+CREATE DATABASE renting_db;
+```
+
+La contraseña se configura con una variable de entorno. En PowerShell, antes de correr el servidor:
+```powershell
+$env:DB_PASSWORD = "tu_contraseña_postgres"
+```
+
+Si el usuario o nombre de BD son distintos al default, también se pueden configurar:
+```powershell
+$env:DB_NAME = "renting_db"
+$env:DB_USER = "postgres"
+$env:DB_HOST = "localhost"
+$env:DB_PORT = "5432"
+```
+
+> Si no se define `DB_PASSWORD`, el sistema usa `admin123` como valor por defecto.
+
+### 3. Migrar la base de datos
 ```powershell
 .\venv\Scripts\python.exe manage.py migrate
 ```
 
-### 3. Levantar el servidor
+### 4. Crear usuario administrador (primera vez)
 ```powershell
-.\venv\Scripts\python.exe manage.py runserver
+.\venv\Scripts\python.exe manage.py createsuperuser
 ```
 
-### 4. Abrir el Frontend
-Abrir directamente en el navegador (doble clic):
-```
-frontend\index.html
+### 5. Levantar el servidor
+```powershell
+.\venv\Scripts\python.exe manage.py runserver
 ```
 
 ---
@@ -41,10 +63,20 @@ frontend\index.html
 
 | Recurso | URL |
 |---|---|
+| Frontend | http://127.0.0.1:8000/ |
 | API Docs (Swagger) | http://127.0.0.1:8000/api/docs/ |
 | Catálogo Maquinarias | http://127.0.0.1:8000/api/maquinarias/ |
 | Login JWT | http://127.0.0.1:8000/api/token/ |
 | Admin Django | http://127.0.0.1:8000/admin/ |
+
+---
+
+## Login desde el Frontend o Swagger
+
+1. Crear un usuario con `createsuperuser` o registrarse vía la API
+2. Ir a `POST /api/token/` con `username` y `password`
+3. Copiar el valor de `access` del response
+4. En Swagger: presionar **Authorize** e ingresar `Bearer <token>`
 
 ---
 
