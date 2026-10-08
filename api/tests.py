@@ -155,6 +155,31 @@ class PersistentCartTests(BaseApiTestCase):
         self.assertEqual(Carro.objects.filter(usuario=self.cliente).count(), 1)
         self.assertEqual(Carro.objects.filter(usuario=otra_empresa).count(), 1)
 
+
+class CustomerContractTests(BaseApiTestCase):
+    """Comprueba que el cliente pueda consultar el estado de sus contratos."""
+
+    def test_customer_sees_own_contract_status_and_not_another_company(self):
+        otra_empresa = Usuario.objects.create_user(
+            username='contrato_otra_empresa',
+            email='contrato_otra_empresa@example.test',
+            password='ClaveLocal-Segura-2026',
+            rol='CLIENTE',
+        )
+        propio = self.crear_contrato(usuario=self.cliente)
+        propio.estado = 'ENTREGADO'
+        propio.save(update_fields=['estado'])
+        self.crear_contrato(usuario=otra_empresa)
+        self.api.force_authenticate(user=self.cliente)
+
+        response = self.api.get('/api/mis-contratos/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['id'], propio.id)
+        self.assertEqual(response.data[0]['estado'], 'ENTREGADO')
+        self.assertEqual(len(response.data[0]['detalles']), 1)
+
     def test_cart_survives_logout_and_duplicate_period_is_rejected(self):
         fecha_inicio = localdate() + timedelta(days=10)
         fecha_fin = fecha_inicio + timedelta(days=4)

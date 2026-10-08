@@ -20,6 +20,7 @@
       <ul class="nav-links" id="navLinks">
         <li><a href="#catalogo">Catálogo</a></li>
         <li><a href="#como-funciona">El proceso</a></li>
+        <li id="customerOrdersNavItem" hidden><a href="#mis-arriendos">Mis arriendos</a></li>
         <li id="adminNavItem" hidden><a href="#gestion">Gestión</a></li>
       </ul>
       <div class="nav-actions">
@@ -60,6 +61,16 @@
         <figcaption><span>MAQUIRENT / EQUIPOS PARA OBRA</span><span>Arrienda con fechas claras</span></figcaption>
         <span class="hero-index" aria-hidden="true">01 <i>/</i> 03</span>
       </figure>
+    </div>
+  </section>
+
+  <section class="customer-orders-section" id="mis-arriendos" hidden aria-labelledby="customerOrdersTitle">
+    <div class="container">
+      <div class="section-header customer-orders-header">
+        <div><span class="section-badge">Seguimiento de solicitudes</span><h2 class="section-title" id="customerOrdersTitle">Tus arriendos</h2><p class="section-desc">Consulta el estado, las fechas y el detalle de cada contrato de tu empresa.</p></div>
+        <button class="btn-outline" id="refreshCustomerOrders" type="button">Actualizar estados</button>
+      </div>
+      <div class="customer-orders-list" id="customerOrders" aria-live="polite"><p class="catalog-message">Cargando tus arriendos…</p></div>
     </div>
   </section>
 

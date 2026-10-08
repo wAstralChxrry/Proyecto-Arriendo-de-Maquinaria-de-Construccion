@@ -45,11 +45,15 @@ const isExecutiveSession = () => {
 };
 function updateAccountInterface() {
   const executive = Boolean(authToken) && isExecutiveSession();
+  const customer = Boolean(authToken) && !executive;
   document.getElementById('loginBtn').textContent = authToken ? 'Cerrar sesión' : 'Iniciar sesión';
   document.getElementById('adminNavItem').hidden = !executive;
+  document.getElementById('customerOrdersNavItem').hidden = !customer;
+  document.getElementById('mis-arriendos').hidden = !customer;
   document.getElementById('adminPanel').hidden = !executive;
   document.getElementById('cartBtn').hidden = executive;
   document.getElementById('registerBtn').style.display = authToken ? 'none' : '';
+  if (!customer) document.getElementById('customerOrders').innerHTML = '';
   if (!executive) {
     document.getElementById('adminOrders').innerHTML = '';
     document.getElementById('adminMachineList').innerHTML = '';
@@ -333,6 +337,8 @@ document.getElementById('checkoutBtn').addEventListener('click', async () => {
       updateCartBadge();
       closeModal('cartModal');
       showToast(`Contrato generado. Folio: ${contrato.codigo_uuid}. Estado: PENDIENTE.`);
+      await fetchCustomerContracts();
+      document.getElementById('mis-arriendos').scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     const error = await res.json();
@@ -412,6 +418,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
       document.getElementById('loginBtn').textContent = 'Cerrar sesión';
       updateAccountInterface();
       await fetchCartFromBackend();
+      await fetchCustomerContracts();
       showToast('Cuenta creada. Ya puedes armar tu solicitud.');
     } else {
       closeModal('registerModal');
@@ -454,7 +461,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       showToast(`Bienvenido, ${username}!`);
 
       if (isExecutiveSession()) await loadExecutiveDashboard();
-      else await fetchCartFromBackend();
+      else {
+        await fetchCartFromBackend();
+        await fetchCustomerContracts();
+      }
     } else {
       errEl.textContent = 'Usuario o contraseña incorrectos.';
     }
@@ -529,6 +539,52 @@ const contractStateLabels = {
   PENDIENTE: 'Pendiente', PAGADO: 'Pagado', ENTREGADO: 'Entregado',
   COMPLETADO: 'Completado', CANCELADO: 'Cancelado'
 };
+const customerStateDescriptions = {
+  PENDIENTE: 'Solicitud recibida. El ejecutivo debe revisar y confirmar el arriendo.',
+  PAGADO: 'Pago confirmado. El equipo quedó reservado para las fechas indicadas.',
+  ENTREGADO: 'Equipo entregado. El período de arriendo está en curso.',
+  COMPLETADO: 'Arriendo finalizado y equipo devuelto.',
+  CANCELADO: 'Este contrato fue cancelado. Contacta al ejecutivo si necesitas más información.'
+};
+
+// Cada cliente consulta solo sus contratos; el backend aplica el filtro por usuario autenticado.
+async function fetchCustomerContracts() {
+  if (!authToken || isExecutiveSession() || isLocalFile()) return;
+  const list = document.getElementById('customerOrders');
+  try {
+    const response = await apiFetch(`${API_BASE}/api/mis-contratos/`);
+    if (!response.ok) throw new Error('No se pudieron cargar tus arriendos. Intenta actualizar.');
+    const payload = await response.json();
+    const contracts = Array.isArray(payload) ? payload : payload.results || [];
+    if (!contracts.length) {
+      list.innerHTML = '<p class="customer-orders-empty">Aún no tienes solicitudes. Cuando confirmes un arriendo, podrás seguirlo aquí.</p>';
+      return;
+    }
+
+    const stages = ['PENDIENTE', 'PAGADO', 'ENTREGADO', 'COMPLETADO'];
+    list.innerHTML = [...contracts].sort((first, second) => Number(second.id) - Number(first.id)).map(order => {
+      const state = contractStateLabels[order.estado] || order.estado;
+      const stageIndex = stages.indexOf(order.estado);
+      const details = (order.detalles || []).map(detail => {
+        const machine = MACHINE_CATALOG.find(item => item.id === detail.maquinaria);
+        const name = machine?.nombre || `Maquinaria #${detail.maquinaria ?? 'eliminada'}`;
+        return `<li><strong>${escapeHtml(name)}</strong><span>${escapeHtml(detail.fecha_inicio)} al ${escapeHtml(detail.fecha_fin)}</span><span>${fmt(detail.subtotal)}</span></li>`;
+      }).join('');
+      const progress = stageIndex < 0
+        ? `<p class="customer-order-cancelled">${escapeHtml(customerStateDescriptions[order.estado] || state)}</p>`
+        : `<ol class="rental-progress" aria-label="Estado del arriendo">${stages.map((stage, index) => `<li class="${index <= stageIndex ? 'is-reached' : ''}">${escapeHtml(contractStateLabels[stage])}</li>`).join('')}</ol><p class="customer-order-message">${escapeHtml(customerStateDescriptions[order.estado] || '')}</p>`;
+      const created = order.fecha_creacion ? new Date(order.fecha_creacion).toLocaleDateString('es-CL') : 'Fecha no disponible';
+      return `<article class="customer-order-card">
+        <div class="customer-order-top"><div><span class="section-label">Solicitud del ${escapeHtml(created)}</span><h3>Contrato #${Number(order.id)}</h3><p>Folio ${escapeHtml(order.codigo_uuid || 'no disponible')}</p></div><span class="admin-order-status status-${String(order.estado).toLowerCase()}">${escapeHtml(state)}</span></div>
+        ${progress}
+        <ul class="customer-order-details">${details || '<li>Sin equipos asociados.</li>'}</ul>
+        <div class="customer-order-total"><span>Total del contrato</span><strong>${fmt(order.total)}</strong></div>
+      </article>`;
+    }).join('');
+  } catch (error) {
+    list.innerHTML = `<p class="customer-orders-empty">${escapeHtml(error.message || 'No se pudieron cargar tus arriendos.')}</p>`;
+  }
+}
 
 // Muestra las solicitudes visibles para el Ejecutivo y las transiciones permitidas por contrato.
 async function fetchAdminOrders() {
@@ -616,6 +672,7 @@ async function changeContractState(contractId, nextState, button) {
 }
 
 document.getElementById('refreshAdmin').addEventListener('click', loadExecutiveDashboard);
+document.getElementById('refreshCustomerOrders').addEventListener('click', fetchCustomerContracts);
 document.getElementById('adminOrders').addEventListener('click', event => {
   const button = event.target.closest('[data-order-id]');
   if (button) changeContractState(Number(button.dataset.orderId), button.dataset.nextState, button);
@@ -739,7 +796,13 @@ document.getElementById('fechaFin').min = localISODate();
 fetchCatalog().then(() => {
   if (!authToken) return;
   if (isExecutiveSession()) loadExecutiveDashboard();
-  else fetchCartFromBackend();
+  else {
+    fetchCartFromBackend();
+    fetchCustomerContracts();
+  }
 });
 // Refresca el stock cuando el usuario vuelve a la pestaña después de otra gestión.
-window.addEventListener('focus', fetchCatalog);
+window.addEventListener('focus', () => {
+  fetchCatalog();
+  if (authToken && !isExecutiveSession()) fetchCustomerContracts();
+});

@@ -107,6 +107,7 @@ Abre el sitio en dos ventanas del navegador e inicia sesión en cada una con una
 - **Documentación:** drf-spectacular (OpenAPI / Swagger)
 - **Filtros:** django-filter sobre catálogo de maquinarias
 - **Carrito:** Persistente en DB mediante relación `OneToOneField`
+- **Seguimiento del cliente:** Cada empresa consulta el estado, folio, fechas y equipos de sus propios contratos desde **Mis arriendos**.
 - **Stock:** Descuento atómico (`transaction.atomic`) al estado `PAGADO`
 - **Contratos:** Cada orden tiene un folio UUID único además de su ID interno. El UUID se asigna también a contratos existentes mediante una migración.
 

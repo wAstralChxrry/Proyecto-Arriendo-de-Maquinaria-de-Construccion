@@ -35,7 +35,7 @@ El sistema maneja el stock de manera transaccional para garantizar la integridad
 5. Si un contrato pagado o entregado se cancela, o se marca como completado al devolver el equipo, el sistema repone el stock dentro de una transacción.
 
 ## 5. Autenticación, permisos y filtros
-Los endpoints `/api/token/` y `/api/token/refresh/` entregan y renuevan JWT. El token incluye los claims `rol` e `is_superuser`. La lectura del catálogo es pública; el carro y checkout requieren rol de cliente; la edición del inventario y los cambios de estado requieren rol de ejecutivo. Cada cliente solo consulta sus propios contratos.
+Los endpoints `/api/token/` y `/api/token/refresh/` entregan y renuevan JWT. El token incluye los claims `rol` e `is_superuser`. La lectura del catálogo es pública; el carro y checkout requieren rol de cliente; la edición del inventario y los cambios de estado requieren rol de ejecutivo. Cada cliente solo consulta sus propios contratos desde la sección **Mis arriendos**, que muestra el estado, folio, fechas y equipos asociados.
 
 El catálogo se filtra con `django-filter`: `categoria`, `tarifa_min` y `tarifa_max`. También permite búsqueda por nombre o categoría mediante `search`.
 
