@@ -5,9 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MaquiRent | Arriendo de Maquinaria de Construcción</title>
   <meta name="description" content="Plataforma de arriendo de maquinaria pesada para empresas constructoras. Excavadoras, grúas, bulldozers y más." />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -16,13 +13,14 @@
   <nav class="navbar" id="navbar">
     <div class="nav-container">
       <a href="#" class="nav-logo">
-        <span class="logo-icon">#</span>
+        <span class="logo-icon" aria-hidden="true">M</span>
         <span class="logo-text">Maqui<strong>Rent</strong></span>
       </a>
-      <ul class="nav-links">
+      <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="navLinks" aria-label="Abrir menú"><span></span><span></span></button>
+      <ul class="nav-links" id="navLinks">
         <li><a href="#catalogo">Catálogo</a></li>
-        <li><a href="#como-funciona">Cómo Funciona</a></li>
-        <li><a href="#contacto">Contacto</a></li>
+        <li><a href="#como-funciona">El proceso</a></li>
+        <li id="adminNavItem" hidden><a href="#gestion">Gestión</a></li>
       </ul>
       <div class="nav-actions">
         <button class="btn-cart" id="cartBtn">
@@ -30,31 +28,72 @@
           <span class="cart-badge" id="cartBadge">0</span>
         </button>
         <button class="btn-login" id="loginBtn">Iniciar Sesión</button>
-        <button class="btn-primary" id="registerBtn">Registrarse</button>
+        <button class="btn-primary" id="registerBtn" type="button">Crear cuenta</button>
       </div>
     </div>
   </nav>
 
+  <div class="local-mode-note" id="localModeNote" hidden>
+    Estás viendo el archivo local. Para iniciar sesión y guardar el carro, abre el <a href="http://127.0.0.1:8000/">sitio conectado</a>.
+  </div>
+
   <!-- ======== HERO ======== -->
   <section class="hero">
-    <div class="hero-bg">
-      <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=1600&auto=format&fit=crop&q=80" alt="Construcción" class="hero-img" />
-      <div class="hero-overlay"></div>
-    </div>
     <div class="hero-content">
-      <span class="hero-badge">Plataforma Profesional de Arriendos</span>
-      <h1 class="hero-title">La Maquinaria <br/><span class="gradient-text">Que Tu Obra Necesita</span></h1>
-      <p class="hero-desc">Arrienda excavadoras, grúas, bulldozers y más maquinaria pesada de manera rápida, segura y transparente. Precios diarios fijos, sin sorpresas.</p>
-      <div class="hero-actions">
-        <a href="#catalogo" class="btn-primary btn-lg">Ver Catálogo</a>
-        <a href="#como-funciona" class="btn-outline btn-lg">Cómo Funciona</a>
+      <div class="hero-copy">
+        <span class="hero-kicker"><span class="status-dot"></span> Arriendo de maquinaria · Chile</span>
+        <h1 class="hero-title">Que la obra avance.<br><em>Del equipo nos encargamos.</em></h1>
+        <p class="hero-desc">Busca por tipo de máquina, revisa disponibilidad y solicita tus fechas. Sin cotizaciones a ciegas: tarifa diaria y garantía a la vista.</p>
+        <div class="hero-actions">
+          <a href="#catalogo" class="btn-primary btn-lg">Buscar maquinaria <span aria-hidden="true">↗</span></a>
+          <span class="hero-assurance">Precios y disponibilidad desde el catálogo</span>
+        </div>
+        <div class="hero-rule"></div>
+        <div class="hero-stats">
+          <div class="stat"><span class="stat-num">01</span><span class="stat-label">Elige el equipo</span></div>
+          <div class="stat"><span class="stat-num">02</span><span class="stat-label">Define las fechas</span></div>
+          <div class="stat"><span class="stat-num">03</span><span class="stat-label">Envía la solicitud</span></div>
+        </div>
       </div>
-      <div class="hero-stats">
-        <div class="stat"><span class="stat-num">+120</span><span class="stat-label">Máquinas</span></div>
-        <div class="stat-divider"></div>
-        <div class="stat"><span class="stat-num">+500</span><span class="stat-label">Arriendos</span></div>
-        <div class="stat-divider"></div>
-        <div class="stat"><span class="stat-num">98%</span><span class="stat-label">Satisfacción</span></div>
+      <figure class="hero-visual">
+        <img src="https://d3fts8l0q3k4tm.cloudfront.net/briggsjcb.com/93904876-f88a-480b-a64e-3fdc17093939.jpeg" alt="Excavadora sobre orugas trabajando en obra" class="hero-img" fetchpriority="high" />
+        <figcaption><span>MAQUIRENT / EQUIPOS PARA OBRA</span><span>Arrienda con fechas claras</span></figcaption>
+        <span class="hero-index" aria-hidden="true">01 <i>/</i> 03</span>
+      </figure>
+    </div>
+  </section>
+
+  <section class="admin-section" id="adminPanel" hidden>
+    <div class="container">
+      <div class="section-header admin-header">
+        <div><span class="section-badge">Panel ejecutivo</span><h2 class="section-title">Operación de arriendos</h2><p class="section-desc">Administra el inventario y actualiza el estado de cada contrato.</p></div>
+        <button class="btn-outline" id="refreshAdmin" type="button">Actualizar datos</button>
+      </div>
+      <div class="admin-stats" id="adminStats" aria-live="polite"></div>
+      <div class="admin-layout">
+        <section class="admin-card admin-orders-section" aria-labelledby="adminOrdersTitle">
+          <div class="admin-card-heading"><div><span class="section-label">Seguimiento</span><h3 id="adminOrdersTitle">Pedidos y contratos</h3></div><span class="admin-count" id="adminOrderCount">0</span></div>
+          <div class="admin-orders" id="adminOrders" aria-live="polite"><p class="catalog-message">Cargando contratos…</p></div>
+        </section>
+        <section class="admin-card admin-inventory-section" aria-labelledby="adminInventoryTitle">
+          <div class="admin-card-heading"><div><span class="section-label">Catálogo</span><h3 id="adminInventoryTitle">Inventario</h3></div></div>
+          <form id="adminMachineForm" class="admin-machine-form">
+            <input id="adminMachineId" type="hidden" />
+            <label>Nombre<input id="adminMachineName" maxlength="100" required /></label>
+            <label>Categoría<input id="adminMachineCategory" maxlength="50" required /></label>
+            <div class="admin-form-row">
+              <label>Tarifa diaria<input id="adminMachineRate" type="number" min="0" step="0.01" required /></label>
+              <label>Garantía<input id="adminMachineGuarantee" type="number" min="0" step="0.01" required /></label>
+            </div>
+            <div class="admin-form-row">
+              <label>Unidades<input id="adminMachineStock" type="number" min="0" step="1" required /></label>
+              <label>Foto (URL)<input id="adminMachineImage" type="url" maxlength="500" /></label>
+            </div>
+            <p class="admin-form-error" id="adminMachineError" role="alert"></p>
+            <div class="admin-form-actions"><button class="btn-primary" id="saveMachineBtn" type="submit">Agregar maquinaria</button><button class="btn-outline" id="cancelMachineEdit" type="button" hidden>Cancelar edición</button></div>
+          </form>
+          <div class="admin-machine-list" id="adminMachineList"></div>
+        </section>
       </div>
     </div>
   </section>
@@ -63,22 +102,24 @@
   <section class="catalog-section" id="catalogo">
     <div class="container">
       <div class="section-header">
-        <span class="section-badge">Inventario Disponible</span>
-        <h2 class="section-title">Catálogo de Maquinaria</h2>
-        <p class="section-desc">Filtra por categoría para encontrar el equipo que necesitas.</p>
+        <div><span class="section-badge">El inventario, al día</span>
+        <h2 class="section-title">Equipos para cada etapa de la obra.</h2>
+        <p class="section-desc">Compara tarifas, garantía y unidades disponibles antes de elegir.</p></div>
+        <label class="catalog-search"><span aria-hidden="true">⌕</span><input id="catalogSearch" type="search" placeholder="Busca una máquina…" aria-label="Buscar maquinaria" /><kbd>↵</kbd></label>
       </div>
 
-      <div class="filter-bar">
-        <button class="filter-btn active" data-filter="all">Todos</button>
-        <button class="filter-btn" data-filter="Excavación">Excavación</button>
-        <button class="filter-btn" data-filter="Elevación">Elevación</button>
-        <button class="filter-btn" data-filter="Movimiento de Tierra">Mov. de Tierra</button>
-        <button class="filter-btn" data-filter="Compactación">Compactación</button>
-        <button class="filter-btn" data-filter="Transporte">Transporte</button>
+      <div class="catalog-toolbar">
+        <div class="filter-bar" id="filterBar" aria-label="Filtrar por categoría"></div>
+        <span class="catalog-count" id="catalogCount" aria-live="polite"></span>
+      </div>
+      <div class="catalog-price-range" aria-label="Filtrar por tarifa diaria">
+        <span>Tarifa diaria</span>
+        <label for="priceMin">Desde <input id="priceMin" type="number" min="0" inputmode="numeric" placeholder="$ mínimo" /></label>
+        <label for="priceMax">Hasta <input id="priceMax" type="number" min="0" inputmode="numeric" placeholder="$ máximo" /></label>
       </div>
 
       <div class="catalog-grid" id="catalogGrid">
-        <!-- Las tarjetas se generan dinámicamente con JavaScript -->
+        <p class="catalog-message">Conectando con el inventario…</p>
       </div>
     </div>
   </section>
@@ -95,7 +136,7 @@
           <div class="step-num">01</div>
           <div class="step-icon">01</div>
           <h3>Regístrate</h3>
-          <p>Crea tu cuenta de Empresa Constructora en minutos. Acceso inmediato a todo el catálogo.</p>
+          <p>Crea tu cuenta con usuario, correo y contraseña para guardar tus solicitudes.</p>
         </div>
         <div class="step-card">
           <div class="step-num">02</div>
@@ -121,56 +162,74 @@
 
   <!-- ======== MODAL LOGIN ======== -->
   <div class="modal-overlay" id="loginModal">
-    <div class="modal">
-      <button class="modal-close" id="closeLogin">X</button>
-      <div class="modal-icon">[ Acceso ]</div>
-      <h2 class="modal-title">Iniciar Sesión</h2>
-      <p class="modal-desc">Accede a tu cuenta para gestionar arriendos.</p>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <button class="modal-close" id="closeLogin" type="button" aria-label="Cerrar">×</button>
+      <div class="auth-mark"><span class="logo-icon">M</span><span>MAQUIRENT / CLIENTES</span></div>
+      <h2 class="modal-title" id="loginTitle">Qué bueno verte.</h2>
+      <p class="modal-desc">Entra para continuar con tu carro y tus solicitudes.</p>
       <form id="loginForm" class="modal-form">
         <div class="form-group">
-          <label>Usuario</label>
-          <input type="text" id="loginUser" placeholder="Ej: empresa_constructora" required />
+          <label for="loginUser">Usuario</label>
+          <input type="text" id="loginUser" autocomplete="username" placeholder="Tu usuario" required />
         </div>
         <div class="form-group">
-          <label>Contraseña</label>
-          <input type="password" id="loginPass" placeholder="••••••••" required />
+          <label for="loginPass">Contraseña</label>
+          <input type="password" id="loginPass" autocomplete="current-password" placeholder="Tu contraseña" required />
         </div>
-        <div class="form-error" id="loginError"></div>
+        <div class="form-error" id="loginError" role="alert"></div>
         <button type="submit" class="btn-primary btn-full">Ingresar</button>
       </form>
-      <p class="modal-footer-text">API Backend: <code>POST /api/token/</code></p>
+      <p class="auth-switch">¿Aún no tienes cuenta? <button class="text-button" type="button" id="loginGoRegister">Crear una</button></p>
     </div>
   </div>
 
   <!-- ======== MODAL CARRO ======== -->
   <div class="modal-overlay" id="cartModal">
-    <div class="modal modal-cart">
-      <button class="modal-close" id="closeCart">X</button>
-      <h2 class="modal-title">Carro Tu Carro de Arriendo</h2>
+    <div class="modal modal-cart" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
+      <button class="modal-close" id="closeCart" type="button" aria-label="Cerrar">×</button>
+      <div class="cart-heading"><div><span class="section-label">TU SELECCIÓN</span><h2 class="modal-title" id="cartTitle">Carro de arriendo</h2></div><span class="cart-heading-badge" id="cartModalCount">0 equipos</span></div>
       <div id="cartItems" class="cart-items-list"></div>
       <div class="cart-total-row">
         <span>Total estimado:</span>
         <strong id="cartTotal">$0</strong>
       </div>
-      <button class="btn-primary btn-full" id="checkoutBtn" style="margin-top:16px">Confirmar Arriendo</button>
-      <p class="modal-footer-text">El stock se descuenta solo al confirmar el pago.</p>
+      <button class="btn-primary btn-full" id="checkoutBtn" style="margin-top:16px">Enviar solicitud <span aria-hidden="true">→</span></button>
+      <p class="modal-footer-text">El inventario se actualiza cuando el ejecutivo confirma el pago.</p>
+    </div>
+  </div>
+
+  <!-- Alta directa para clientes; el backend nunca acepta un rol privilegiado desde este formulario. -->
+  <div class="modal-overlay" id="registerModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="registerTitle">
+      <button class="modal-close" id="closeRegister" type="button" aria-label="Cerrar">×</button>
+      <div class="auth-mark"><span class="logo-icon">M</span><span>MAQUIRENT / CLIENTES</span></div>
+      <h2 class="modal-title" id="registerTitle">Empecemos por lo simple.</h2>
+      <p class="modal-desc">Crea tu acceso para guardar el carro y seguir tus solicitudes.</p>
+      <form id="registerForm" class="modal-form">
+        <div class="form-group"><label for="registerUser">Usuario</label><input id="registerUser" autocomplete="username" placeholder="Ej. constructora_sur" required minlength="3" /><small>Lo usarás para iniciar sesión.</small></div>
+        <div class="form-group"><label for="registerEmail">Correo electrónico</label><input id="registerEmail" type="email" autocomplete="email" placeholder="nombre@empresa.cl" required /></div>
+        <div class="form-group"><label for="registerPassword">Contraseña</label><div class="password-field"><input id="registerPassword" type="password" autocomplete="new-password" placeholder="Al menos 8 caracteres" required minlength="8" /><button type="button" id="togglePassword" aria-pressed="false">Mostrar</button></div><small>Usa una clave que no sea común ni igual a tu usuario.</small></div>
+        <div class="form-error" id="registerError" role="alert"></div>
+        <button type="submit" class="btn-primary btn-full">Crear cuenta</button>
+      </form>
+      <p class="auth-switch">¿Ya tienes cuenta? <button class="text-button" type="button" id="goLogin">Inicia sesión</button></p>
     </div>
   </div>
 
   <!-- ======== MODAL AGREGAR AL CARRO ======== -->
   <div class="modal-overlay" id="addCartModal">
-    <div class="modal">
-      <button class="modal-close" id="closeAddCart">X</button>
-      <div class="modal-icon">[ Fechas ]</div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="addCartTitle">
+      <button class="modal-close" id="closeAddCart" type="button" aria-label="Cerrar">×</button>
+      <div class="auth-mark"><span class="section-label">SOLICITUD DE ARRIENDO</span></div>
       <h2 class="modal-title" id="addCartTitle">Arrendar Maquinaria</h2>
       <p class="modal-desc" id="addCartDesc"></p>
       <form id="addCartForm" class="modal-form">
         <div class="form-group">
-          <label>Fecha de Inicio</label>
+          <label for="fechaInicio">Fecha de inicio</label>
           <input type="date" id="fechaInicio" required />
         </div>
         <div class="form-group">
-          <label>Fecha de Fin</label>
+          <label for="fechaFin">Fecha de fin</label>
           <input type="date" id="fechaFin" required />
         </div>
         <div class="cost-preview" id="costPreview" style="display:none">
@@ -184,43 +243,33 @@
   </div>
 
   <!-- ======== TOAST ======== -->
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- ======== FOOTER ======== -->
-  <footer class="footer" id="contacto">
+  <footer class="footer">
     <div class="container footer-grid">
       <div class="footer-brand">
-        <span class="nav-logo"><span class="logo-icon">#</span><span class="logo-text">Maqui<strong>Rent</strong></span></span>
-        <p>Plataforma de arriendo de maquinaria pesada para empresas constructoras en Chile.</p>
+        <span class="nav-logo"><span class="logo-icon">M</span><span class="logo-text">Maqui<strong>Rent</strong></span></span>
+        <p>Maquinaria para obra, con disponibilidad y condiciones claras desde el primer paso.</p>
       </div>
       <div class="footer-col">
-        <h4>Plataforma</h4>
+        <h4>Explora</h4>
         <ul>
           <li><a href="#catalogo">Catálogo</a></li>
-          <li><a href="#como-funciona">Cómo Funciona</a></li>
-          <li><a href="http://127.0.0.1:8000/api/docs/" target="_blank">API Docs (Swagger)</a></li>
+          <li><a href="#como-funciona">Cómo funciona</a></li>
         </ul>
       </div>
       <div class="footer-col">
-        <h4>Desarrollo</h4>
+        <h4>Tu arriendo</h4>
         <ul>
-          <li>Backend: Django REST Framework</li>
-          <li>Auth: JWT (SimpleJWT)</li>
-          <li>DB: PostgreSQL</li>
-          <li>Docs: drf-spectacular</li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Desarrollador</h4>
-        <ul>
-          <li>Máximo Agusto Aldea Garrido</li>
-          <li>Sección: IEC-N4-C1</li>
-          <li>Año: 2 año</li>
+          <li>Tarifa diaria visible</li>
+          <li>Garantía indicada por equipo</li>
+          <li>Solicitud sujeta a confirmación</li>
         </ul>
       </div>
     </div>
     <div class="footer-bottom">
-      <p>© 2026 MaquiRent · Todos los derechos reservados</p>
+      <p>Máximo Agusto Aldea Garrido · IEC-N4-C1 · 2.º año · © 2026 MaquiRent</p>
     </div>
   </footer>
 

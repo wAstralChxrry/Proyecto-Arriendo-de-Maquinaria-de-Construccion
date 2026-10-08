@@ -20,16 +20,20 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### 2. Configurar la base de datos
+### 2. Configurar la base de datos y el entorno
 
 Crear la base de datos en PostgreSQL (desde psql o pgAdmin):
 ```sql
 CREATE DATABASE renting_db;
 ```
 
-La contraseña se configura con una variable de entorno. En PowerShell, antes de correr el servidor:
+Define los valores de entorno en PowerShell antes de ejecutar comandos de Django. Genera una clave secreta nueva para cada entorno:
 ```powershell
-$env:DB_PASSWORD = "tu_contraseña_postgres"
+$env:DJANGO_SECRET_KEY = (python -c "import secrets; print(secrets.token_urlsafe(64))")
+$env:DJANGO_DEBUG = "True"
+$env:ALLOWED_HOSTS = "127.0.0.1,localhost"
+$secureDbPassword = Read-Host "Contraseña de PostgreSQL" -AsSecureString
+$env:DB_PASSWORD = [System.Net.NetworkCredential]::new("", $secureDbPassword).Password
 ```
 
 Si el usuario o nombre de BD son distintos al default, también se pueden configurar:
@@ -40,7 +44,7 @@ $env:DB_HOST = "localhost"
 $env:DB_PORT = "5432"
 ```
 
-> Si no se define `DB_PASSWORD`, el sistema usa `admin123` como valor por defecto.
+No guardes estos valores en Git. `.env.example` es una plantilla de referencia; Django lee estas opciones desde el entorno del proceso y no carga archivos `.env`. Si falta la clave, la contraseña o la lista de hosts, Django se detiene con un mensaje claro. Para producción establece `DJANGO_DEBUG=False`, una `DJANGO_SECRET_KEY` privada, `ALLOWED_HOSTS` con los dominios reales y la contraseña de PostgreSQL mediante el proveedor de despliegue.
 
 ### 3. Migrar la base de datos
 ```powershell
@@ -89,6 +93,7 @@ $env:DB_PORT = "5432"
 - **Filtros:** django-filter sobre catálogo de maquinarias
 - **Carrito:** Persistente en DB mediante relación `OneToOneField`
 - **Stock:** Descuento atómico (`transaction.atomic`) al estado `PAGADO`
+- **Contratos:** Cada orden tiene un folio UUID único además de su ID interno. El UUID se asigna también a contratos existentes mediante una migración.
 
 ---
 
@@ -96,8 +101,8 @@ $env:DB_PORT = "5432"
 
 | Rol | Permisos |
 |---|---|
-| `CLIENTE` (Empresa Constructora) | Ver catálogo, gestionar carro, generar contratos |
-| `ADMIN` (Ejecutivo de Arriendos) | Todo lo anterior + crear maquinarias, cambiar estados de contratos |
+| `CLIENTE` (Empresa Constructora) | Ver catálogo, gestionar su carro, confirmar contratos y consultar sus contratos |
+| `ADMIN` (Ejecutivo de Arriendos) | Gestionar maquinaria, consultar contratos y actualizar sus estados |
 
 ---
 

@@ -5,19 +5,21 @@ Conecta los endpoints con sus respectivos ViewSets mediante el DefaultRouter de 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from api.views import MaquinariaViewSet, CarroViewSet, ContratoViewSet
+from api.views import MaquinariaViewSet, CarroViewSet, ContratoViewSet, RegistroViewSet
 
-# El DefaultRouter genera automáticamente las rutas CRUD estándar para cada ViewSet
+# El router expone las rutas permitidas por cada ViewSet.
 router = DefaultRouter()
 router.register(r'maquinarias', MaquinariaViewSet, basename='maquinaria')
 router.register(r'carro-arriendo', CarroViewSet, basename='carro')
 router.register(r'contratos', ContratoViewSet, basename='contrato')
 
 urlpatterns = [
+    # Registro real desde la página; la API asigna siempre el rol de cliente.
+    path('api/registro/', RegistroViewSet.as_view({'post': 'create'}), name='registro'),
     # Inclusión de todas las rutas generadas por el router
     path('api/', include(router.urls)),
     
-    # Ruta auxiliar para que los Clientes accedan directamente a sus contratos
+    # Usa la consulta filtrada del ViewSet para mostrar contratos propios al cliente.
     path('api/mis-contratos/', ContratoViewSet.as_view({'get': 'list'}), name='mis-contratos'),
     
     # Endpoints de autenticación JWT

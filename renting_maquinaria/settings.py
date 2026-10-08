@@ -7,6 +7,7 @@ Año: 2 año
 import os
 from datetime import timedelta
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -15,13 +16,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-hl&h_)k1e&nsk)t3lrg8#nsi&4)fe5f8bo==wpt(#r+jt@c02s'
+# Secretos y opciones sensibles se reciben por entorno; la aplicación falla al
+# iniciar si falta una configuración necesaria, en vez de usar valores débiles.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    raise ImproperlyConfigured('Configura DJANGO_SECRET_KEY antes de iniciar Django.')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG_VALUE = os.environ.get('DJANGO_DEBUG', 'False').strip().lower()
+if DEBUG_VALUE not in {'true', 'false'}:
+    raise ImproperlyConfigured('DJANGO_DEBUG debe ser True o False.')
+DEBUG = DEBUG_VALUE == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', '').split(',') if host.strip()]
+if not ALLOWED_HOSTS:
+    raise ImproperlyConfigured('Configura ALLOWED_HOSTS con los dominios permitidos.')
 
 
 # Application definition
@@ -81,11 +89,13 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': os.environ.get('DB_NAME', 'renting_db'),
         'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'admin123'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
         'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
+if not DATABASES['default']['PASSWORD']:
+    raise ImproperlyConfigured('Configura DB_PASSWORD para conectar con PostgreSQL.')
 
 AUTH_USER_MODEL = 'api.Usuario'
 

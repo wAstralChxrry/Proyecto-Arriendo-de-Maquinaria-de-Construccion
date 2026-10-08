@@ -1,0 +1,98 @@
+[
+  {
+    "model": "api.maquinaria",
+    "pk": 1,
+    "fields": {
+      "nombre": "Excavadora sobre orugas",
+      "categoria": "Excavación",
+      "tarifa_diaria": "85000.00",
+      "garantia_fija": "150000.00",
+      "stock_disponible": 3,
+      "imagen_url": "https://d3fts8l0q3k4tm.cloudfront.net/briggsjcb.com/93904876-f88a-480b-a64e-3fdc17093939.jpeg"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 2,
+    "fields": {
+      "nombre": "Grúa torre de obra",
+      "categoria": "Elevación",
+      "tarifa_diaria": "120000.00",
+      "garantia_fija": "300000.00",
+      "stock_disponible": 1,
+      "imagen_url": "https://storeys.com/media-library/construction.jpg?coordinates=0%2C31%2C0%2C31&height=700&id=36665559&quality=50&width=1245"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 3,
+    "fields": {
+      "nombre": "Bulldozer sobre orugas",
+      "categoria": "Movimiento de Tierra",
+      "tarifa_diaria": "70000.00",
+      "garantia_fija": "120000.00",
+      "stock_disponible": 2,
+      "imagen_url": "https://global-uploads.webflow.com/62987134cee3f41ed59eeb9d/6304847decdc3b5cb09f0164_bulldozer-btp.jpeg"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 4,
+    "fields": {
+      "nombre": "Rodillo compactador",
+      "categoria": "Compactación",
+      "tarifa_diaria": "45000.00",
+      "garantia_fija": "80000.00",
+      "stock_disponible": 4,
+      "imagen_url": "https://lacentraletp.fr/images/card-compacteur.jpg"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 5,
+    "fields": {
+      "nombre": "Retroexcavadora con cargador frontal",
+      "categoria": "Excavación",
+      "tarifa_diaria": "55000.00",
+      "garantia_fija": "100000.00",
+      "stock_disponible": 5,
+      "imagen_url": "https://f.machineryhost.com/edb2f2ef1793b017950eeed7f662b522/shutterstock_1721312419.jpg"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 6,
+    "fields": {
+      "nombre": "Camión pluma",
+      "categoria": "Transporte",
+      "tarifa_diaria": "60000.00",
+      "garantia_fija": "90000.00",
+      "stock_disponible": 0,
+      "imagen_url": "https://www.hiabquebec.com/media/equipement-de-manutention/hiab/xs-244/gallery/2.jpg"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 7,
+    "fields": {
+      "nombre": "Minicargador sobre orugas",
+      "categoria": "Movimiento de Tierra",
+      "tarifa_diaria": "35000.00",
+      "garantia_fija": "60000.00",
+      "stock_disponible": 6,
+      "imagen_url": "https://i.ebayimg.com/images/g/Sa4AAeSwedNpN5Ul/s-l1200.jpg"
+    }
+  },
+  {
+    "model": "api.maquinaria",
+    "pk": 8,
+    "fields": {
+      "nombre": "Grúa horquilla",
+      "categoria": "Elevación",
+      "tarifa_diaria": "28000.00",
+      "garantia_fija": "50000.00",
+      "stock_disponible": 3,
+      "imagen_url": "https://www.aaaforklifts.com/cdn/shop/articles/thumbnail_cd4aaff9-570e-4b6a-94fe-b2240189360f.jpg?v=1716690722&width=1000"
+    }
+  }
+]
