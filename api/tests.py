@@ -120,6 +120,41 @@ class CatalogFilterTests(BaseApiTestCase):
 class PersistentCartTests(BaseApiTestCase):
     """Comprueba persistencia entre sesiones y rechazo de duplicados."""
 
+    def test_two_companies_keep_separate_carts(self):
+        """Cada sesión ve y modifica únicamente el carro de su empresa."""
+        otra_empresa = Usuario.objects.create_user(
+            username='otra_empresa_prueba',
+            email='otra_empresa@example.test',
+            password='ClaveLocal-Segura-2026',
+            rol='CLIENTE',
+        )
+        empresa_uno = APIClient()
+        empresa_dos = APIClient()
+        empresa_uno.force_authenticate(user=self.cliente)
+        empresa_dos.force_authenticate(user=otra_empresa)
+        fechas = {
+            'maquinaria': self.maquinaria.id,
+            'fecha_inicio': (localdate() + timedelta(days=10)).isoformat(),
+            'fecha_fin': (localdate() + timedelta(days=14)).isoformat(),
+        }
+
+        agregado = empresa_uno.post('/api/carro-arriendo/', fechas, format='json')
+        carro_uno = empresa_uno.get('/api/carro-arriendo/')
+        carro_dos = empresa_dos.get('/api/carro-arriendo/')
+        intento_eliminar = empresa_dos.delete(
+            f"/api/carro-arriendo/{carro_uno.data['items'][0]['id']}/"
+        )
+        carro_uno_despues = empresa_uno.get('/api/carro-arriendo/')
+
+        self.assertEqual(agregado.status_code, 201)
+        self.assertEqual(len(carro_uno.data['items']), 1)
+        self.assertEqual(carro_dos.data['items'], [])
+        self.assertEqual(intento_eliminar.status_code, 404)
+        self.assertEqual(len(carro_uno_despues.data['items']), 1)
+        self.assertNotEqual(carro_uno.data['id'], carro_dos.data['id'])
+        self.assertEqual(Carro.objects.filter(usuario=self.cliente).count(), 1)
+        self.assertEqual(Carro.objects.filter(usuario=otra_empresa).count(), 1)
+
     def test_cart_survives_logout_and_duplicate_period_is_rejected(self):
         fecha_inicio = localdate() + timedelta(days=10)
         fecha_fin = fecha_inicio + timedelta(days=4)

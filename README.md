@@ -93,6 +93,10 @@ En una base de datos nueva, este comando carga el catálogo de ejemplo con sus f
 3. Copiar el valor de `access` del response
 4. En Swagger: presionar **Authorize** e ingresar `Bearer <token>`
 
+### Probar dos empresas en paralelo
+
+Abre el sitio en dos ventanas del navegador e inicia sesión en cada una con una cuenta `CLIENTE` distinta. El token se guarda por pestaña, así que iniciar sesión en una ventana no reemplaza la sesión de la otra. Cada carro se carga y se guarda en PostgreSQL asociado a la cuenta autenticada; los ítems y contratos de una empresa no se muestran a la otra.
+
 ---
 
 ## Arquitectura

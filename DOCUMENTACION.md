@@ -24,6 +24,7 @@ Para desarrollo local, configura `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=True`, `ALLO
 A diferencia de implementaciones basadas en sesiones temporales, este sistema cuenta con un **carro de compras persistente**.
 - Si un Cliente agrega un ítem al carrito y finaliza su sesión, los ítems agregados previamente se conservan intactos en la base de datos al volver a conectarse.
 - Esto se logra mediante una relación uno a uno (`OneToOneField`) entre la entidad `Usuario` y la entidad `Carro`.
+- Para probar empresas en paralelo, abre el sitio en dos ventanas e inicia sesión con cuentas `CLIENTE` distintas. El token vive en el almacenamiento de la pestaña y la API obtiene el carro del usuario autenticado, por lo que las sesiones y los carros permanecen separados.
 
 ## 4. Reglas de Negocio y Flujo de Inventario
 El sistema maneja el stock de manera transaccional para garantizar la integridad de los datos:

@@ -14,8 +14,9 @@ const MACHINE_CATALOG = [];
 let currentFilter = 'all';
 let currentSearch = '';
 let cart = [];
-let authToken = localStorage.getItem('maquirent_access_token');
-let refreshToken = localStorage.getItem('maquirent_refresh_token');
+// sessionStorage mantiene una sesión por pestaña; cada carro sigue persistido por usuario en la base de datos.
+let authToken = sessionStorage.getItem('maquirent_access_token');
+let refreshToken = sessionStorage.getItem('maquirent_refresh_token');
 let selectedMachine = null;
 let lastModalTrigger = null;
 
@@ -70,8 +71,8 @@ async function apiFetch(url, options = {}) {
   });
   if (!refreshed.ok) {
     authToken = null; refreshToken = null;
-    localStorage.removeItem('maquirent_access_token'); localStorage.removeItem('maquirent_refresh_token');
-    localStorage.removeItem('maquirent_username');
+    sessionStorage.removeItem('maquirent_access_token'); sessionStorage.removeItem('maquirent_refresh_token');
+    sessionStorage.removeItem('maquirent_username');
     cart = [];
     updateAccountInterface();
     updateCartBadge();
@@ -79,7 +80,7 @@ async function apiFetch(url, options = {}) {
   }
   const tokens = await refreshed.json();
   authToken = tokens.access;
-  localStorage.setItem('maquirent_access_token', authToken);
+  sessionStorage.setItem('maquirent_access_token', authToken);
   return send();
 }
 
@@ -355,7 +356,7 @@ document.getElementById('loginBtn').addEventListener('click', () => {
   if (requireConnectedSite()) return;
   if (authToken) {
     authToken = null; refreshToken = null; cart = [];
-    localStorage.removeItem('maquirent_access_token'); localStorage.removeItem('maquirent_refresh_token'); localStorage.removeItem('maquirent_username');
+    sessionStorage.removeItem('maquirent_access_token'); sessionStorage.removeItem('maquirent_refresh_token'); sessionStorage.removeItem('maquirent_username');
     document.getElementById('loginBtn').textContent = 'Iniciar sesión';
       updateAccountInterface();
     updateCartBadge(); showToast('Sesión cerrada. Tu carro queda guardado en tu cuenta.');
@@ -404,9 +405,9 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
     } catch (sessionError) { /* La cuenta ya se creó; ofrecer login manual si falla la sesión automática. */ }
     if (sessionResponse?.ok) {
       authToken = session.access; refreshToken = session.refresh;
-      localStorage.setItem('maquirent_access_token', authToken);
-      localStorage.setItem('maquirent_refresh_token', refreshToken);
-      localStorage.setItem('maquirent_username', payload.username);
+      sessionStorage.setItem('maquirent_access_token', authToken);
+      sessionStorage.setItem('maquirent_refresh_token', refreshToken);
+      sessionStorage.setItem('maquirent_username', payload.username);
       closeModal('registerModal');
       document.getElementById('loginBtn').textContent = 'Cerrar sesión';
       updateAccountInterface();
@@ -444,9 +445,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     if (res.ok) {
       authToken = data.access;
       refreshToken = data.refresh;
-      localStorage.setItem('maquirent_access_token', authToken);
-      localStorage.setItem('maquirent_refresh_token', refreshToken);
-      localStorage.setItem('maquirent_username', username);
+      sessionStorage.setItem('maquirent_access_token', authToken);
+      sessionStorage.setItem('maquirent_refresh_token', refreshToken);
+      sessionStorage.setItem('maquirent_username', username);
       closeModal('loginModal');
       document.getElementById('loginBtn').textContent = 'Cerrar sesión';
       updateAccountInterface();
