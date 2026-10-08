@@ -51,12 +51,23 @@ No guardes estos valores en Git. `.env.example` es una plantilla de referencia; 
 .\venv\Scripts\python.exe manage.py migrate
 ```
 
-### 4. Crear usuario administrador (primera vez)
+### 4. Cargar maquinarias de demostración (opcional)
+En una base de datos nueva, este comando carga el catálogo de ejemplo con sus fotografías. No crea cuentas; registra tu superusuario y crea clientes desde la página.
+```powershell
+.\venv\Scripts\python.exe manage.py loaddata api/fixtures/maquinarias_demo.json
+```
+
+### 5. Crear usuario administrador (primera vez)
 ```powershell
 .\venv\Scripts\python.exe manage.py createsuperuser
 ```
 
-### 5. Levantar el servidor
+### 6. Ejecutar las pruebas
+```powershell
+.\venv\Scripts\python.exe manage.py test api
+```
+
+### 7. Levantar el servidor
 ```powershell
 .\venv\Scripts\python.exe manage.py runserver
 ```
