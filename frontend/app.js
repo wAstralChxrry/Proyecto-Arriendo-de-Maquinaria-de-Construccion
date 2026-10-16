@@ -18,6 +18,7 @@ let cart = [];
 let authToken = sessionStorage.getItem('maquirent_access_token');
 let refreshToken = sessionStorage.getItem('maquirent_refresh_token');
 let selectedMachine = null;
+let pendingPaymentContractId = null;
 let lastModalTrigger = null;
 
 // ===== UTILIDADES =====
@@ -540,7 +541,7 @@ const contractStateLabels = {
   COMPLETADO: 'Completado', CANCELADO: 'Cancelado'
 };
 const customerStateDescriptions = {
-  PENDIENTE: 'Solicitud recibida. El ejecutivo debe revisar y confirmar el arriendo.',
+  PENDIENTE: 'Solicitud recibida. Puedes probar el pago demo o esperar la confirmación del ejecutivo.',
   PAGADO: 'Pago confirmado. El equipo quedó reservado para las fechas indicadas.',
   ENTREGADO: 'Equipo entregado. El período de arriendo está en curso.',
   COMPLETADO: 'Arriendo finalizado y equipo devuelto.',
@@ -574,11 +575,15 @@ async function fetchCustomerContracts() {
         ? `<p class="customer-order-cancelled">${escapeHtml(customerStateDescriptions[order.estado] || state)}</p>`
         : `<ol class="rental-progress" aria-label="Estado del arriendo">${stages.map((stage, index) => `<li class="${index <= stageIndex ? 'is-reached' : ''}">${escapeHtml(contractStateLabels[stage])}</li>`).join('')}</ol><p class="customer-order-message">${escapeHtml(customerStateDescriptions[order.estado] || '')}</p>`;
       const created = order.fecha_creacion ? new Date(order.fecha_creacion).toLocaleDateString('es-CL') : 'Fecha no disponible';
+      const paymentAction = order.estado === 'PENDIENTE'
+        ? `<div class="customer-order-actions"><button class="btn-primary" type="button" data-demo-payment-id="${Number(order.id)}">Pagar demo</button></div>`
+        : '';
       return `<article class="customer-order-card">
         <div class="customer-order-top"><div><span class="section-label">Solicitud del ${escapeHtml(created)}</span><h3>Contrato #${Number(order.id)}</h3><p>Folio ${escapeHtml(order.codigo_uuid || 'no disponible')}</p></div><span class="admin-order-status status-${String(order.estado).toLowerCase()}">${escapeHtml(state)}</span></div>
         ${progress}
         <ul class="customer-order-details">${details || '<li>Sin equipos asociados.</li>'}</ul>
         <div class="customer-order-total"><span>Total del contrato</span><strong>${fmt(order.total)}</strong></div>
+        ${paymentAction}
       </article>`;
     }).join('');
   } catch (error) {
@@ -673,9 +678,45 @@ async function changeContractState(contractId, nextState, button) {
 
 document.getElementById('refreshAdmin').addEventListener('click', loadExecutiveDashboard);
 document.getElementById('refreshCustomerOrders').addEventListener('click', fetchCustomerContracts);
+document.getElementById('customerOrders').addEventListener('click', event => {
+  const button = event.target.closest('[data-demo-payment-id]');
+  if (!button) return;
+  pendingPaymentContractId = Number(button.dataset.demoPaymentId);
+  document.getElementById('demoPaymentError').textContent = '';
+  document.getElementById('demoPaymentForm').reset();
+  openModal('demoPaymentModal');
+});
 document.getElementById('adminOrders').addEventListener('click', event => {
   const button = event.target.closest('[data-order-id]');
   if (button) changeContractState(Number(button.dataset.orderId), button.dataset.nextState, button);
+});
+
+document.getElementById('closeDemoPayment').addEventListener('click', () => closeModal('demoPaymentModal'));
+document.getElementById('demoPaymentForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!pendingPaymentContractId || !authToken) return;
+  const button = document.getElementById('demoPaymentBtn');
+  const error = document.getElementById('demoPaymentError');
+  error.textContent = '';
+  button.disabled = true;
+  try {
+    const response = await apiFetch(`${API_BASE}/api/contratos/${pendingPaymentContractId}/pago-demo/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ demo: true })
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(errorText(payload));
+    closeModal('demoPaymentModal');
+    showToast(`Pago demo aprobado. Contrato #${pendingPaymentContractId} reservado.`);
+    pendingPaymentContractId = null;
+    await fetchCatalog();
+    await fetchCustomerContracts();
+  } catch (operationError) {
+    error.textContent = operationError.message || 'No se pudo procesar el pago demo.';
+  } finally {
+    button.disabled = false;
+  }
 });
 
 function resetAdminMachineForm() {

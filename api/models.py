@@ -67,6 +67,12 @@ class Contrato(models.Model):
     codigo_uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)
     estado = models.CharField(max_length=15, choices=ESTADOS, default='PENDIENTE')
+    METODOS_PAGO = (
+        ('DEMO', 'Pago demo'),
+        ('MANUAL', 'Confirmado por ejecutivo'),
+    )
+    metodo_pago = models.CharField(max_length=10, choices=METODOS_PAGO, blank=True, default='')
+    fecha_pago = models.DateTimeField(null=True, blank=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     total = models.DecimalField(max_digits=12, decimal_places=2)
 

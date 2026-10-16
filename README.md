@@ -62,12 +62,22 @@ En una base de datos nueva, este comando carga el catálogo de ejemplo con sus f
 .\venv\Scripts\python.exe manage.py createsuperuser
 ```
 
-### 6. Ejecutar las pruebas
+### 6. Pago demo y control de stock
+Al enviar una solicitud, el cliente puede entrar a **Mis arriendos** y usar
+**Pagar demo**. Ese endpoint simula el pago, cambia el contrato a `PAGADO` y
+descuenta el stock dentro de una transacción. También se puede confirmar una
+solicitud desde el panel ejecutivo; ambas rutas aplican la misma validación.
+
+Las solicitudes `PENDIENTE` reservan capacidad para impedir que se creen
+solicitudes infinitas para las mismas fechas. Si una solicitud no continúa,
+el ejecutivo puede cancelarla para liberar esa reserva.
+
+### 7. Ejecutar las pruebas
 ```powershell
 .\venv\Scripts\python.exe manage.py test api
 ```
 
-### 7. Levantar el servidor
+### 8. Levantar el servidor
 ```powershell
 .\venv\Scripts\python.exe manage.py runserver
 ```

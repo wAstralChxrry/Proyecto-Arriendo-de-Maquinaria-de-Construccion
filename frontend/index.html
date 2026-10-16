@@ -205,7 +205,28 @@
         <strong id="cartTotal">$0</strong>
       </div>
       <button class="btn-primary btn-full" id="checkoutBtn" style="margin-top:16px">Enviar solicitud <span aria-hidden="true">→</span></button>
-      <p class="modal-footer-text">El inventario se actualiza cuando el ejecutivo confirma el pago.</p>
+      <p class="modal-footer-text">Después de enviar la solicitud podrás probar el pago demo desde “Mis arriendos”.</p>
+    </div>
+  </div>
+
+  <!-- Pago simulado: no se almacenan datos de tarjeta ni se conecta a una pasarela real. -->
+  <div class="modal-overlay" id="demoPaymentModal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="demoPaymentTitle">
+      <button class="modal-close" id="closeDemoPayment" type="button" aria-label="Cerrar">×</button>
+      <span class="section-label">ENTORNO DE PRUEBA</span>
+      <h2 class="modal-title" id="demoPaymentTitle">Pagar arriendo</h2>
+      <p class="modal-desc">Este pago es simulado. No uses ni ingreses datos de una tarjeta real.</p>
+      <form id="demoPaymentForm" class="modal-form">
+        <div class="form-group"><label for="demoCardName">Nombre del titular</label><input id="demoCardName" required autocomplete="off" placeholder="Cliente Demo" /></div>
+        <div class="form-group"><label for="demoCardNumber">Número demo</label><input id="demoCardNumber" inputmode="numeric" minlength="4" required autocomplete="off" placeholder="4242 4242 4242 4242" /></div>
+        <div class="form-row">
+          <div class="form-group"><label for="demoCardExpiry">Vencimiento</label><input id="demoCardExpiry" required autocomplete="off" placeholder="12/30" /></div>
+          <div class="form-group"><label for="demoCardCvv">CVV demo</label><input id="demoCardCvv" inputmode="numeric" minlength="3" required autocomplete="off" placeholder="123" /></div>
+        </div>
+        <div class="form-error" id="demoPaymentError" role="alert"></div>
+        <button type="submit" class="btn-primary btn-full" id="demoPaymentBtn">Confirmar pago demo</button>
+      </form>
+      <p class="modal-footer-text">Puedes usar: 4242 4242 4242 4242 · 12/30 · 123.</p>
     </div>
   </div>
 

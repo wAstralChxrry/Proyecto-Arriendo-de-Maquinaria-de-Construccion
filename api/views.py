@@ -7,10 +7,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
 from .filters import MaquinariaFilter
+from .inventory import (
+    InventoryUnavailable,
+    available_units_for_period,
+    release_contract_inventory,
+    reserve_contract_inventory,
+)
 from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato
 from .serializers import MaquinariaSerializer, CarroSerializer, ItemCarroSerializer, ContratoSerializer, RegistroSerializer
 
@@ -112,17 +118,18 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             maquinarias = {m.id: m for m in Maquinaria.objects.select_for_update().filter(id__in=ids).order_by('id')}
             for item in items:
                 item.maquinaria = maquinarias[item.maquinaria_id]
-                activos = DetalleContrato.objects.filter(
-                    maquinaria=item.maquinaria, contrato__estado__in=['PAGADO', 'ENTREGADO']
-                )
-                unidades_fisicas = item.maquinaria.stock_disponible + activos.count()
-                ocupadas = activos.filter(fecha_inicio__lt=item.fecha_fin, fecha_fin__gt=item.fecha_inicio).count()
                 nuevas = sum(
                     1 for otro in items
                     if otro.maquinaria_id == item.maquinaria_id
-                    and otro.fecha_inicio < item.fecha_fin and otro.fecha_fin > item.fecha_inicio
+                    and otro.fecha_inicio < item.fecha_fin
+                    and otro.fecha_fin > item.fecha_inicio
                 )
-                if ocupadas + nuevas > unidades_fisicas:
+                if available_units_for_period(
+                    item.maquinaria,
+                    item.fecha_inicio,
+                    item.fecha_fin,
+                    extra_units=nuevas,
+                ) < 0:
                     return Response({"error": f"{item.maquinaria.nombre} ya no está disponible para esas fechas."}, status=status.HTTP_400_BAD_REQUEST)
 
             # El servidor calcula el total con tarifas y garantías vigentes.
@@ -139,9 +146,35 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
                     subtotal=item.costo_calculado
                 )
             
-            # El stock se descuenta cuando el Ejecutivo registra el pago.
+            # El stock se descuenta cuando se confirma el pago, por el
+            # ejecutivo o mediante el pago demo del cliente.
             carro.items.all().delete()
             return Response(ContratoSerializer(contrato).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsCliente], url_path='pago-demo')
+    def pago_demo(self, request, pk=None):
+        """Simula un pago del cliente y reserva el stock de forma atómica."""
+        with transaction.atomic():
+            contrato = Contrato.objects.select_for_update().filter(
+                pk=pk,
+                usuario=request.user,
+            ).first()
+            if not contrato:
+                return Response({"error": "Contrato no encontrado."}, status=status.HTTP_404_NOT_FOUND)
+            if contrato.estado != 'PENDIENTE':
+                return Response(
+                    {"error": "Solo se puede pagar una solicitud pendiente."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                reserve_contract_inventory(contrato)
+            except InventoryUnavailable as error:
+                return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+            contrato.estado = 'PAGADO'
+            contrato.metodo_pago = 'DEMO'
+            contrato.fecha_pago = timezone.now()
+            contrato.save(update_fields=['estado', 'metodo_pago', 'fecha_pago'])
+            return Response(ContratoSerializer(contrato).data)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsEjecutivo])
     def estado(self, request, pk=None):
@@ -159,45 +192,21 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             }
             if nuevo_estado not in estados_permitidos.get(contrato.estado, set()):
                 return Response({"error": f"Transición no permitida: {contrato.estado} → {nuevo_estado}."}, status=status.HTTP_400_BAD_REQUEST)
-            detalles = list(contrato.detalles.select_related('maquinaria').order_by('maquinaria_id'))
-            ids = sorted({d.maquinaria_id for d in detalles if d.maquinaria_id})
-            maquinarias = {m.id: m for m in Maquinaria.objects.select_for_update().filter(id__in=ids).order_by('id')}
             # Solo la transición a PAGADO descuenta unidades del inventario.
             if nuevo_estado == 'PAGADO':
-                requeridas = {}
-                for detalle in detalles:
-                    if detalle.maquinaria_id:
-                        requeridas[detalle.maquinaria_id] = requeridas.get(detalle.maquinaria_id, 0) + 1
-                for maquina_id, cantidad in requeridas.items():
-                    if maquinarias[maquina_id].stock_disponible < cantidad:
-                        return Response({"error": f"Stock insuficiente para {maquinarias[maquina_id].nombre}."}, status=status.HTTP_400_BAD_REQUEST)
-                    # La validación combina stock libre y reservas con fechas solapadas.
-                    contratos_activos = DetalleContrato.objects.filter(
-                        maquinaria_id=maquina_id, contrato__estado__in=['PAGADO', 'ENTREGADO']
-                    )
-                    unidades_fisicas = maquinarias[maquina_id].stock_disponible + contratos_activos.count()
-                    nuevos = [d for d in detalles if d.maquinaria_id == maquina_id]
-                    for detalle in nuevos:
-                        ocupadas_en_periodo = contratos_activos.filter(
-                            fecha_inicio__lt=detalle.fecha_fin, fecha_fin__gt=detalle.fecha_inicio
-                        ).count()
-                        nuevas_en_periodo = sum(
-                            1 for otro in nuevos
-                            if otro.fecha_inicio < detalle.fecha_fin and otro.fecha_fin > detalle.fecha_inicio
-                        )
-                        if ocupadas_en_periodo + nuevas_en_periodo > unidades_fisicas:
-                            return Response({"error": f"No hay unidades de {maquinarias[maquina_id].nombre} disponibles para las fechas solicitadas."}, status=status.HTTP_400_BAD_REQUEST)
-                for maquina_id, cantidad in requeridas.items():
-                    Maquinaria.objects.filter(pk=maquina_id).update(stock_disponible=F('stock_disponible') - cantidad)
+                try:
+                    reserve_contract_inventory(contrato)
+                except InventoryUnavailable as error:
+                    return Response({"error": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+                contrato.metodo_pago = 'MANUAL'
+                contrato.fecha_pago = timezone.now()
 
             # Cancelar o completar devuelve las unidades previamente descontadas.
             elif nuevo_estado in ['CANCELADO', 'COMPLETADO'] and contrato.estado in ['PAGADO', 'ENTREGADO']:
-                for maquina_id in ids:
-                    cantidad = sum(1 for d in detalles if d.maquinaria_id == maquina_id)
-                    Maquinaria.objects.filter(pk=maquina_id).update(stock_disponible=F('stock_disponible') + cantidad)
+                release_contract_inventory(contrato)
 
             contrato.estado = nuevo_estado
-            contrato.save()
+            contrato.save(update_fields=['estado', 'metodo_pago', 'fecha_pago'])
             return Response(ContratoSerializer(contrato).data)
 
 class RegistroViewSet(viewsets.ViewSet):

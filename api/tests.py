@@ -246,6 +246,61 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
         self.maquinaria.refresh_from_db()
         self.assertEqual(self.maquinaria.stock_disponible, 2)
 
+    def test_demo_payment_deducts_stock_for_customer(self):
+        self.api.force_authenticate(user=self.cliente)
+        fecha_inicio = localdate() + timedelta(days=12)
+        fecha_fin = fecha_inicio + timedelta(days=3)
+        self.api.post('/api/carro-arriendo/', {
+            'maquinaria': self.maquinaria.id,
+            'fecha_inicio': fecha_inicio.isoformat(),
+            'fecha_fin': fecha_fin.isoformat(),
+        }, format='json')
+        created = self.api.post('/api/contratos/checkout/', {}, format='json')
+        contrato_id = created.data['id']
+
+        paid = self.api.post(f'/api/contratos/{contrato_id}/pago-demo/', {
+            'demo': True,
+        }, format='json')
+
+        self.assertEqual(paid.status_code, 200)
+        self.assertEqual(paid.data['estado'], 'PAGADO')
+        self.assertEqual(paid.data['metodo_pago'], 'DEMO')
+        self.maquinaria.refresh_from_db()
+        self.assertEqual(self.maquinaria.stock_disponible, 1)
+
+    def test_pending_requests_reserve_capacity_before_payment(self):
+        otra_empresa = Usuario.objects.create_user(
+            username='otra_empresa_stock',
+            email='otra_empresa_stock@example.test',
+            password='ClaveLocal-Segura-2026',
+            rol='CLIENTE',
+        )
+        inicio = localdate() + timedelta(days=30)
+        fin = inicio + timedelta(days=3)
+        payload = {
+            'maquinaria': self.maquinaria.id,
+            'fecha_inicio': inicio.isoformat(),
+            'fecha_fin': fin.isoformat(),
+        }
+
+        self.api.force_authenticate(user=self.cliente)
+        self.assertEqual(self.api.post('/api/carro-arriendo/', payload, format='json').status_code, 201)
+        self.assertEqual(self.api.post('/api/contratos/checkout/', {}, format='json').status_code, 201)
+
+        second_client = APIClient()
+        second_client.force_authenticate(user=otra_empresa)
+        self.assertEqual(second_client.post('/api/carro-arriendo/', payload, format='json').status_code, 201)
+        self.assertEqual(second_client.post('/api/contratos/checkout/', {}, format='json').status_code, 201)
+
+        third_client = APIClient()
+        third_client.force_authenticate(user=Usuario.objects.create_user(
+            username='tercera_empresa_stock',
+            email='tercera_empresa_stock@example.test',
+            password='ClaveLocal-Segura-2026',
+            rol='CLIENTE',
+        ))
+        self.assertEqual(third_client.post('/api/carro-arriendo/', payload, format='json').status_code, 400)
+
     def test_paid_contract_cancellation_restores_stock(self):
         contrato = self.crear_contrato()
         self.api.force_authenticate(user=self.ejecutivo)

@@ -8,6 +8,8 @@ from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato, Usu
 from django.contrib.auth.password_validation import validate_password
 from django.utils.timezone import localdate
 
+from .inventory import available_units_for_period
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Añade el rol del usuario a los tokens emitidos por la API."""
     @classmethod
@@ -63,17 +65,15 @@ class ItemCarroSerializer(serializers.ModelSerializer):
             if duplicado.exists():
                 raise serializers.ValidationError("Esa maquinaria ya está en el carro para ese período.")
 
-            contratos_activos = DetalleContrato.objects.filter(
-                maquinaria=maquinaria, contrato__estado__in=['PAGADO', 'ENTREGADO'],
-            )
-            activos = contratos_activos.filter(
-                fecha_inicio__lt=data['fecha_fin'], fecha_fin__gt=data['fecha_inicio'],
-            ).count()
             en_carro = carro.items.filter(
                 maquinaria=maquinaria, fecha_inicio__lt=data['fecha_fin'], fecha_fin__gt=data['fecha_inicio'],
             ).count()
-            unidades_fisicas = maquinaria.stock_disponible + contratos_activos.count()
-            if activos + en_carro + 1 > unidades_fisicas:
+            if available_units_for_period(
+                maquinaria,
+                data['fecha_inicio'],
+                data['fecha_fin'],
+                extra_units=en_carro + 1,
+            ) < 0:
                 raise serializers.ValidationError("No hay unidades disponibles para esas fechas.")
         return data
 
@@ -99,5 +99,8 @@ class ContratoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Contrato
-        fields = ['id', 'codigo_uuid', 'cliente', 'cliente_email', 'estado', 'fecha_creacion', 'total', 'detalles']
+        fields = [
+            'id', 'codigo_uuid', 'cliente', 'cliente_email', 'estado',
+            'metodo_pago', 'fecha_pago', 'fecha_creacion', 'total', 'detalles',
+        ]
         read_only_fields = fields
