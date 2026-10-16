@@ -19,6 +19,9 @@ let authToken = sessionStorage.getItem('maquirent_access_token');
 let refreshToken = sessionStorage.getItem('maquirent_refresh_token');
 let selectedMachine = null;
 let pendingPaymentContractId = null;
+let adminPaymentSnapshot = new Set();
+let adminDashboardInitialized = false;
+let adminPollingTimer = null;
 let lastModalTrigger = null;
 
 // ===== UTILIDADES =====
@@ -370,6 +373,13 @@ document.getElementById('loginBtn').addEventListener('click', () => {
   if (requireConnectedSite()) return;
   if (authToken) {
     authToken = null; refreshToken = null; cart = [];
+    adminPaymentSnapshot = new Set();
+    adminDashboardInitialized = false;
+    if (adminPollingTimer) {
+      window.clearInterval(adminPollingTimer);
+      adminPollingTimer = null;
+    }
+    document.title = 'MaquiRent | Arriendo de Maquinaria de Construcción';
     sessionStorage.removeItem('maquirent_access_token'); sessionStorage.removeItem('maquirent_refresh_token'); sessionStorage.removeItem('maquirent_username');
     document.getElementById('loginBtn').textContent = 'Iniciar sesión';
       updateAccountInterface();
@@ -606,6 +616,14 @@ async function fetchAdminOrders() {
     if (!response.ok) throw new Error('No se pudieron cargar los contratos.');
     const payload = await response.json();
     const contracts = Array.isArray(payload) ? payload : payload.results || [];
+    const demoPayments = contracts.filter(order => order.estado === 'PAGADO' && order.metodo_pago === 'DEMO');
+    if (adminDashboardInitialized) {
+      demoPayments
+        .filter(order => !adminPaymentSnapshot.has(Number(order.id)))
+        .forEach(order => notifyAdminOfDemoPayment(order));
+    }
+    adminPaymentSnapshot = new Set(demoPayments.map(order => Number(order.id)));
+    adminDashboardInitialized = true;
     document.getElementById('adminOrderCount').textContent = contracts.length;
     const pending = contracts.filter(order => order.estado === 'PENDIENTE').length;
     const active = contracts.filter(order => ['PAGADO', 'ENTREGADO'].includes(order.estado)).length;
@@ -629,12 +647,16 @@ async function fetchAdminOrders() {
         `<button class="admin-action-btn ${nextState === 'CANCELADO' ? 'admin-action-danger' : ''}" type="button" data-order-id="${Number(order.id)}" data-next-state="${nextState}">${label}</button>`
       ).join('');
       const created = order.fecha_creacion ? new Date(order.fecha_creacion).toLocaleString('es-CL') : 'Fecha no disponible';
+      const paymentInfo = order.metodo_pago
+        ? `<p class="admin-order-payment">${order.metodo_pago === 'DEMO' ? '✓ Pago demo recibido' : '✓ Pago confirmado por ejecutivo'}${order.fecha_pago ? ` · ${escapeHtml(new Date(order.fecha_pago).toLocaleString('es-CL'))}` : ''}</p>`
+        : '';
       return `<article class="admin-order">
         <div class="admin-order-top"><div><h4>Contrato #${Number(order.id)} · ${escapeHtml(order.cliente || 'Cliente')}</h4>
         <p class="admin-order-meta">Folio: ${escapeHtml(order.codigo_uuid || '')} · ${escapeHtml(order.cliente_email || '')} · ${escapeHtml(created)}</p></div>
         <span class="admin-order-status status-${String(order.estado).toLowerCase()}">${escapeHtml(state)}</span></div>
         <div class="admin-order-detail">${details || 'Sin equipos asociados.'}</div>
         <div class="admin-order-total">Total: ${fmt(order.total)}</div>
+        ${paymentInfo}
         ${actions ? `<div class="admin-order-actions">${actions}</div>` : ''}
       </article>`;
     }).join('');
@@ -642,6 +664,22 @@ async function fetchAdminOrders() {
     list.innerHTML = `<p class="catalog-message">${escapeHtml(error.message || 'No se pudieron cargar los contratos.')}</p>`;
     document.getElementById('adminOrderCount').textContent = '—';
   }
+}
+
+function notifyAdminOfDemoPayment(order) {
+  const message = `Pago demo recibido: ${order.cliente || 'Cliente'} · Contrato #${Number(order.id)}.`;
+  showToast(message);
+  if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+    new Notification('MaquiRent · Pago demo recibido', { body: message });
+  }
+  document.title = '(1) Pago demo · MaquiRent';
+}
+
+function startAdminPolling() {
+  if (adminPollingTimer) return;
+  adminPollingTimer = window.setInterval(() => {
+    if (authToken && isExecutiveSession()) fetchAdminOrders();
+  }, 10000);
 }
 
 function renderAdminMachines() {
@@ -661,6 +699,7 @@ async function loadExecutiveDashboard() {
   await fetchCatalog();
   await fetchAdminOrders();
   renderAdminMachines();
+  startAdminPolling();
 }
 
 async function changeContractState(contractId, nextState, button) {
@@ -710,7 +749,12 @@ document.getElementById('demoPaymentForm').addEventListener('submit', async even
     const response = await apiFetch(`${API_BASE}/api/contratos/${pendingPaymentContractId}/pago-demo/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ demo: true })
+      body: JSON.stringify({
+        titular: document.getElementById('demoCardName').value.trim(),
+        numero: document.getElementById('demoCardNumber').value.trim(),
+        vencimiento: document.getElementById('demoCardExpiry').value.trim(),
+        cvv: document.getElementById('demoCardCvv').value.trim(),
+      })
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(errorText(payload));
@@ -851,6 +895,7 @@ fetchCatalog().then(() => {
 });
 // Refresca el stock cuando el usuario vuelve a la pestaña después de otra gestión.
 window.addEventListener('focus', () => {
+  if (document.title.startsWith('(1) Pago demo')) document.title = 'MaquiRent | Arriendo de Maquinaria de Construcción';
   fetchCatalog();
   if (authToken && !isExecutiveSession()) fetchCustomerContracts();
 });

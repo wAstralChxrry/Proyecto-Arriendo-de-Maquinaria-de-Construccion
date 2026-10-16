@@ -18,7 +18,14 @@ from .inventory import (
     reserve_contract_inventory,
 )
 from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato
-from .serializers import MaquinariaSerializer, CarroSerializer, ItemCarroSerializer, ContratoSerializer, RegistroSerializer
+from .serializers import (
+    CarroSerializer,
+    ContratoSerializer,
+    ItemCarroSerializer,
+    MaquinariaSerializer,
+    PagoDemoSerializer,
+    RegistroSerializer,
+)
 
 class IsEjecutivo(permissions.BasePermission):
     """Limita las operaciones de gestión al Ejecutivo de Arriendos."""
@@ -152,8 +159,11 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             return Response(ContratoSerializer(contrato).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], permission_classes=[IsCliente], url_path='pago-demo')
+    @extend_schema(request=PagoDemoSerializer, responses=ContratoSerializer)
     def pago_demo(self, request, pk=None):
         """Simula un pago del cliente y reserva el stock de forma atómica."""
+        payment_serializer = PagoDemoSerializer(data=request.data)
+        payment_serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             contrato = Contrato.objects.select_for_update().filter(
                 pk=pk,

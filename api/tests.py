@@ -236,6 +236,7 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
 
         paid = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'PAGADO'}, format='json')
         self.assertEqual(paid.status_code, 200)
+        self.assertEqual(paid.data['metodo_pago'], 'MANUAL')
         self.maquinaria.refresh_from_db()
         self.assertEqual(self.maquinaria.stock_disponible, 1)
 
@@ -259,7 +260,10 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
         contrato_id = created.data['id']
 
         paid = self.api.post(f'/api/contratos/{contrato_id}/pago-demo/', {
-            'demo': True,
+            'titular': 'Cliente Demo',
+            'numero': '4242 4242 4242 4242',
+            'vencimiento': '12/30',
+            'cvv': '123',
         }, format='json')
 
         self.assertEqual(paid.status_code, 200)
@@ -267,6 +271,30 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
         self.assertEqual(paid.data['metodo_pago'], 'DEMO')
         self.maquinaria.refresh_from_db()
         self.assertEqual(self.maquinaria.stock_disponible, 1)
+
+    def test_demo_payment_rejects_invalid_card_without_changing_contract(self):
+        self.api.force_authenticate(user=self.cliente)
+        fecha_inicio = localdate() + timedelta(days=12)
+        fecha_fin = fecha_inicio + timedelta(days=3)
+        self.api.post('/api/carro-arriendo/', {
+            'maquinaria': self.maquinaria.id,
+            'fecha_inicio': fecha_inicio.isoformat(),
+            'fecha_fin': fecha_fin.isoformat(),
+        }, format='json')
+        created = self.api.post('/api/contratos/checkout/', {}, format='json')
+
+        response = self.api.post(f"/api/contratos/{created.data['id']}/pago-demo/", {
+            'titular': 'Cliente Demo',
+            'numero': '1111 1111 1111 1111',
+            'vencimiento': '12/30',
+            'cvv': '123',
+        }, format='json')
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['numero'][0], 'El número de tarjeta demo no es válido.')
+        self.assertEqual(Contrato.objects.get(pk=created.data['id']).estado, 'PENDIENTE')
+        self.maquinaria.refresh_from_db()
+        self.assertEqual(self.maquinaria.stock_disponible, 2)
 
     def test_pending_requests_reserve_capacity_before_payment(self):
         otra_empresa = Usuario.objects.create_user(

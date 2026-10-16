@@ -2,6 +2,9 @@
 Serializadores DRF. Gestionan la conversión de objetos de la base de datos a JSON
 y manejan la inyección de claims personalizados en los tokens JWT.
 """
+import re
+from datetime import date
+
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato, Usuario
@@ -9,6 +12,50 @@ from django.contrib.auth.password_validation import validate_password
 from django.utils.timezone import localdate
 
 from .inventory import available_units_for_period
+
+
+class PagoDemoSerializer(serializers.Serializer):
+    """Valida una tarjeta ficticia sin almacenar datos sensibles."""
+
+    titular = serializers.CharField(max_length=120)
+    numero = serializers.CharField(max_length=23, write_only=True)
+    vencimiento = serializers.CharField(max_length=7, write_only=True)
+    cvv = serializers.CharField(max_length=4, write_only=True)
+
+    def validate_numero(self, value):
+        digits = re.sub(r'\D', '', value)
+        if not 13 <= len(digits) <= 19:
+            raise serializers.ValidationError('El número demo debe tener entre 13 y 19 dígitos.')
+        checksum = 0
+        doubled = False
+        for digit in reversed(digits):
+            number = int(digit)
+            if doubled:
+                number *= 2
+                if number > 9:
+                    number -= 9
+            checksum += number
+            doubled = not doubled
+        if checksum % 10 != 0:
+            raise serializers.ValidationError('El número de tarjeta demo no es válido.')
+        return digits
+
+    def validate_vencimiento(self, value):
+        match = re.fullmatch(r'(0[1-9]|1[0-2])/(\d{2}|\d{4})', value.strip())
+        if not match:
+            raise serializers.ValidationError('Usa el formato MM/AA, por ejemplo 12/30.')
+        month = int(match.group(1))
+        year = int(match.group(2))
+        year += 2000 if year < 100 else 0
+        today = date.today()
+        if (year, month) < (today.year, today.month):
+            raise serializers.ValidationError('La tarjeta demo está vencida.')
+        return f'{month:02d}/{year % 100:02d}'
+
+    def validate_cvv(self, value):
+        if not re.fullmatch(r'\d{3,4}', value.strip()):
+            raise serializers.ValidationError('El CVV demo debe tener 3 o 4 dígitos.')
+        return value.strip()
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Añade el rol del usuario a los tokens emitidos por la API."""

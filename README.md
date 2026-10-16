@@ -68,6 +68,13 @@ Al enviar una solicitud, el cliente puede entrar a **Mis arriendos** y usar
 descuenta el stock dentro de una transacción. También se puede confirmar una
 solicitud desde el panel ejecutivo; ambas rutas aplican la misma validación.
 
+Para aprobar el pago demo usa `4242 4242 4242 4242`, vencimiento `12/30` y
+CVV `123`. El backend valida el formato, vencimiento y checksum Luhn, pero no
+guarda ningún dato de tarjeta. El panel ejecutivo revisa automáticamente los
+pagos demo nuevos y muestra una notificación; si el navegador ya tiene permiso
+de notificaciones, también puede mostrar un aviso nativo cuando la pestaña está
+oculta.
+
 Las solicitudes `PENDIENTE` reservan capacidad para impedir que se creen
 solicitudes infinitas para las mismas fechas. Si una solicitud no continúa,
 el ejecutivo puede cancelarla para liberar esa reserva.

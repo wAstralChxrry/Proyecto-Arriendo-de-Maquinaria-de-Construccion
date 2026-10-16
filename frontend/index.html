@@ -218,10 +218,10 @@
       <p class="modal-desc">Este pago es simulado. No uses ni ingreses datos de una tarjeta real.</p>
       <form id="demoPaymentForm" class="modal-form">
         <div class="form-group"><label for="demoCardName">Nombre del titular</label><input id="demoCardName" required autocomplete="off" placeholder="Cliente Demo" /></div>
-        <div class="form-group"><label for="demoCardNumber">Número demo</label><input id="demoCardNumber" inputmode="numeric" minlength="4" required autocomplete="off" placeholder="4242 4242 4242 4242" /></div>
+        <div class="form-group"><label for="demoCardNumber">Número demo</label><input id="demoCardNumber" inputmode="numeric" maxlength="23" minlength="13" required autocomplete="off" placeholder="4242 4242 4242 4242" /></div>
         <div class="form-row">
-          <div class="form-group"><label for="demoCardExpiry">Vencimiento</label><input id="demoCardExpiry" required autocomplete="off" placeholder="12/30" /></div>
-          <div class="form-group"><label for="demoCardCvv">CVV demo</label><input id="demoCardCvv" inputmode="numeric" minlength="3" required autocomplete="off" placeholder="123" /></div>
+          <div class="form-group"><label for="demoCardExpiry">Vencimiento</label><input id="demoCardExpiry" maxlength="7" required autocomplete="off" placeholder="12/30" /></div>
+          <div class="form-group"><label for="demoCardCvv">CVV demo</label><input id="demoCardCvv" inputmode="numeric" maxlength="4" minlength="3" required autocomplete="off" placeholder="123" /></div>
         </div>
         <div class="form-error" id="demoPaymentError" role="alert"></div>
         <button type="submit" class="btn-primary btn-full" id="demoPaymentBtn">Confirmar pago demo</button>
