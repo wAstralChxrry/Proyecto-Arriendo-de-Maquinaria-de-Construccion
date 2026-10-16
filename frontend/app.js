@@ -68,7 +68,13 @@ const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, char => ({
 
 // Renueva silenciosamente el JWT vencido para que la persistencia del carro no termine al cabo de una hora.
 async function apiFetch(url, options = {}) {
-  const send = () => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${authToken}` } });
+  const send = () => fetch(url, {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
+  });
   let response = await send();
   if (response.status !== 401 || !refreshToken) return response;
   const refreshed = await fetch(`${API_BASE}/api/token/refresh/`, {
@@ -135,10 +141,11 @@ function renderCatalog(filter = 'all') {
 
   grid.innerHTML = filtered.map(machine => {
     const stockOk = machine.stock_disponible > 0;
+    const imageUrl = escapeHtml(machine.img || FALLBACK_MACHINE_IMAGE);
     return `
       <div class="machine-card" data-cat="${escapeHtml(machine.categoria)}">
         <div class="card-img-wrapper">
-          <img src="${machine.img}" alt="${escapeHtml(machine.nombre)}" loading="lazy" />
+          <img src="${imageUrl}" alt="${escapeHtml(machine.nombre)}" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_MACHINE_IMAGE}'" />
           <span class="card-badge">${escapeHtml(machine.categoria)}</span>
           <span class="card-stock ${stockOk ? 'stock-ok' : 'stock-out'}">
             ${stockOk ? `${machine.stock_disponible} disponibles` : 'Sin stock'}
