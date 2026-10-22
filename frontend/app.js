@@ -200,7 +200,7 @@ function renderCatalog(filter = 'all') {
     return `
       <article class="machine-card" data-cat="${escapeHtml(machine.categoria)}">
         <div class="card-img-wrapper">
-          <img src="${machine.img}" alt="${escapeHtml(machine.nombre)}" loading="lazy" />
+          <img src="${escapeHtml(safeImageUrl(machine.img))}" alt="${escapeHtml(machine.nombre)}" loading="lazy" decoding="async" />
         </div>
         <div class="card-main">
           <p class="card-category">${escapeHtml(machine.categoria)}</p>
@@ -219,6 +219,22 @@ function renderCatalog(filter = 'all') {
       </article>
     `;
   }).join('');
+  grid.querySelectorAll('.card-img-wrapper img').forEach(useFallbackImage);
+}
+
+function safeImageUrl(value) {
+  try {
+    const url = new URL(value, window.location.origin);
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : FALLBACK_MACHINE_IMAGE;
+  } catch (error) {
+    return FALLBACK_MACHINE_IMAGE;
+  }
+}
+
+function useFallbackImage(image) {
+  image.addEventListener('error', () => {
+    image.src = FALLBACK_MACHINE_IMAGE;
+  }, { once: true });
 }
 
 // Construye categorías desde el API, así no desaparecen categorías agregadas por administración.
@@ -600,7 +616,8 @@ async function fetchCatalog() {
     const featured = availableMachines.find(machine => machine.imagen_url) || MACHINE_CATALOG.find(machine => machine.imagen_url);
     if (featured) {
       const heroImage = document.querySelector('.hero-img');
-      heroImage.src = featured.imagen_url;
+      useFallbackImage(heroImage);
+      heroImage.src = safeImageUrl(featured.imagen_url);
       heroImage.alt = `${featured.nombre} · ${featured.categoria}`;
       document.getElementById('heroMachineName').textContent = featured.nombre.toLocaleUpperCase('es-CL');
     }
@@ -909,6 +926,11 @@ navToggle.addEventListener('click', () => {
 navLinks.addEventListener('click', (event) => {
   if (event.target.closest('a')) { navLinks.classList.remove('open'); navToggle.setAttribute('aria-expanded', 'false'); }
 });
+document.getElementById('mobileRegisterBtn').addEventListener('click', () => {
+  navLinks.classList.remove('open');
+  navToggle.setAttribute('aria-expanded', 'false');
+  document.getElementById('registerBtn').click();
+});
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     const modal = document.querySelector('.modal-overlay.active');
@@ -930,6 +952,23 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
     }
   });
 });
+
+// Aviso transparente: el sitio solo necesita almacenamiento local para sesión y carro.
+const COOKIE_CONSENT_KEY = 'terraWorksPrivacyChoice';
+const cookieConsent = document.getElementById('cookieConsent');
+const readPrivacyChoice = () => {
+  try { return localStorage.getItem(COOKIE_CONSENT_KEY); }
+  catch (error) { return null; }
+};
+const savePrivacyChoice = (choice) => {
+  try { localStorage.setItem(COOKIE_CONSENT_KEY, choice); }
+  catch (error) { /* El sitio sigue funcionando aunque el navegador bloquee el almacenamiento. */ }
+  cookieConsent.hidden = true;
+};
+document.getElementById('necessaryCookiesButton').addEventListener('click', () => savePrivacyChoice('necessary'));
+document.getElementById('allCookiesButton').addEventListener('click', () => savePrivacyChoice('all'));
+document.getElementById('cookieSettingsButton').addEventListener('click', () => { cookieConsent.hidden = false; });
+cookieConsent.hidden = Boolean(readPrivacyChoice());
 
 // ===== INICIALIZACIÓN =====
 restoreSession();

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/style.css?v=terra-works-1" />
+  <link rel="stylesheet" href="/style.css?v=terra-works-2" />
 </head>
 <body>
 
@@ -24,7 +24,8 @@
         <li><a href="#catalogo">Catálogo</a></li>
         <li><a href="#como-funciona">El proceso</a></li>
         <li id="customerOrdersNavItem" hidden><a href="#mis-arriendos">Mis arriendos</a></li>
-        <li id="adminNavItem" hidden><a href="#gestion">Gestión</a></li>
+        <li id="adminNavItem" hidden><a href="#adminPanel">Gestión</a></li>
+        <li class="nav-mobile-action"><button class="nav-mobile-register" id="mobileRegisterBtn" type="button">Crear cuenta de empresa</button></li>
       </ul>
       <div class="nav-actions">
         <a class="btn-cart" id="cartBtn" href="/carrito/" aria-label="Abrir mi carro">
@@ -202,11 +203,11 @@
       <form id="loginForm" class="modal-form">
         <div class="form-group">
           <label for="loginUser">Usuario</label>
-          <input type="text" id="loginUser" autocomplete="username" placeholder="Tu usuario" required />
+          <input type="text" id="loginUser" name="username" autocomplete="username" maxlength="150" placeholder="Tu usuario" required />
         </div>
         <div class="form-group">
           <label for="loginPass">Contraseña</label>
-          <input type="password" id="loginPass" autocomplete="current-password" placeholder="Tu contraseña" required />
+          <input type="password" id="loginPass" name="password" autocomplete="current-password" placeholder="Tu contraseña" required />
         </div>
         <div class="form-error" id="loginError" role="alert"></div>
         <button type="submit" class="btn-primary btn-full">Ingresar</button>
@@ -223,9 +224,9 @@
       <h2 class="modal-title" id="registerTitle">Crear cuenta de empresa</h2>
       <p class="modal-desc">Regístrate para preparar solicitudes y consultar su estado.</p>
       <form id="registerForm" class="modal-form">
-        <div class="form-group"><label for="registerUser">Usuario</label><input id="registerUser" autocomplete="username" placeholder="Ej. constructora_sur" required minlength="3" /><small>Lo usarás para iniciar sesión.</small></div>
-        <div class="form-group"><label for="registerEmail">Correo electrónico</label><input id="registerEmail" type="email" autocomplete="email" placeholder="nombre@empresa.cl" required /></div>
-        <div class="form-group"><label for="registerPassword">Contraseña</label><div class="password-field"><input id="registerPassword" type="password" autocomplete="new-password" placeholder="Al menos 8 caracteres" required minlength="8" /><button type="button" id="togglePassword" aria-pressed="false">Mostrar</button></div><small>Usa una clave que no sea común ni igual a tu usuario.</small></div>
+        <div class="form-group"><label for="registerUser">Usuario</label><input id="registerUser" name="username" autocomplete="username" placeholder="Ej. constructora_sur" required minlength="3" maxlength="150" /><small>Lo usarás para iniciar sesión.</small></div>
+        <div class="form-group"><label for="registerEmail">Correo electrónico</label><input id="registerEmail" name="email" type="email" autocomplete="email" maxlength="254" placeholder="nombre@empresa.cl" required /></div>
+        <div class="form-group"><label for="registerPassword">Contraseña</label><div class="password-field"><input id="registerPassword" name="password" type="password" autocomplete="new-password" placeholder="Al menos 8 caracteres" required minlength="8" /><button type="button" id="togglePassword" aria-pressed="false">Mostrar</button></div><small>Usa una clave que no sea común ni igual a tu usuario.</small></div>
         <div class="form-error" id="registerError" role="alert"></div>
         <button type="submit" class="btn-primary btn-full">Crear cuenta</button>
       </form>
@@ -256,17 +257,17 @@
       <form id="addCartForm" class="modal-form">
         <div class="form-group">
           <label for="fechaInicio">Fecha de inicio</label>
-          <input type="date" id="fechaInicio" required />
+          <input type="date" id="fechaInicio" name="fecha_inicio" required />
         </div>
         <div class="form-group">
           <label for="fechaFin">Fecha de fin</label>
-          <input type="date" id="fechaFin" required />
+          <input type="date" id="fechaFin" name="fecha_fin" required />
         </div>
         <div class="cost-preview" id="costPreview" style="display:none">
           <span>Costo estimado:</span>
           <strong id="costValue"></strong>
         </div>
-        <div class="form-error" id="addCartError"></div>
+        <div class="form-error" id="addCartError" role="alert" aria-live="polite"></div>
         <button type="submit" class="btn-primary btn-full">Agregar al Carro</button>
       </form>
     </div>
@@ -295,6 +296,7 @@
           <li>Tarifa diaria visible</li>
           <li>Garantía indicada por equipo</li>
           <li>Solicitud sujeta a confirmación</li>
+          <li><button class="cookie-settings-link" id="cookieSettingsButton" type="button">Preferencias de privacidad</button></li>
         </ul>
       </div>
     </div>
@@ -303,6 +305,17 @@
     </div>
   </footer>
 
-  <script src="/app.js?v=webpay-integration-1"></script>
+  <section class="cookie-consent" id="cookieConsent" aria-labelledby="cookieConsentTitle" aria-describedby="cookieConsentText" hidden>
+    <div class="cookie-consent-copy">
+      <h2 id="cookieConsentTitle">Privacidad y almacenamiento</h2>
+      <p id="cookieConsentText">Usamos almacenamiento local para mantener tu sesión y tu carro. No instalamos cookies de analítica ni publicidad.</p>
+    </div>
+    <div class="cookie-consent-actions">
+      <button class="cookie-choice-secondary" id="necessaryCookiesButton" type="button">Solo necesarias</button>
+      <button class="cookie-choice-primary" id="allCookiesButton" type="button">Aceptar y continuar</button>
+    </div>
+  </section>
+
+  <script src="/app.js?v=webpay-integration-3"></script>
 </body>
 </html>
