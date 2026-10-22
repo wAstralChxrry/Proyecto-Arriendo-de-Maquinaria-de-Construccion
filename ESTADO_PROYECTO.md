@@ -2,6 +2,15 @@
 
 Última actualización: 2026-10-22
 
+## Punto de continuación
+
+- La rama `origin/master` quedó reemplazada intencionalmente por el contenido funcional de este checkout. HEAD publicado: `d548ed5` (`Complete Webpay demo flow and refresh frontend`). El push fue forzado por instrucción explícita del usuario. Los commits que antes estaban en `master` ya no forman parte de esa rama.
+- El árbol de trabajo quedó limpio después del push. `master` y `respaldo-webpay` apuntan a `d548ed5`; `integrar-webpay` es una rama local antigua y divergente: no trabajar desde ella ni publicarla sin revisar su historial.
+- El servidor `http://100.61.233.219/` fue consultado después del push: devolvió el título Terra Works y el HTML del hero nuevo. Gunicorn y Nginx figuraban activos. El CSS público respondió HTTP 200 y coincidió con el archivo local.
+- No se completó el flujo de pago manual en navegador. La creación de transacción Webpay en integración sí respondió con URL y token; no se usó una tarjeta ni hubo cargo.
+- El cambio a `master` no significa que se haya completado un pago de prueba ni valida todo el recorrido del cliente. Para verificarlo, usar una cuenta de prueba y las tarjetas/documentación vigentes de Transbank.
+- No incluir claves, contraseñas, JWT ni archivos de configuración de la instancia en Git. `renting_maquinaria/settings.py` versionado lee secretos desde variables de entorno; revisar `git diff` antes de añadir cambios locales.
+
 ## Producto
 
 - Marca visible: **Terra Works**.
@@ -24,10 +33,10 @@
 - Instancia actual: Ubuntu, aplicación en `/home/ubuntu/ProyectoMaquinaria`, servida por Gunicorn y Nginx. IP conocida: `100.61.233.219`.
 - Después de cambios backend, reiniciar `sudo systemctl restart gunicorn`; comprobar con `systemctl is-active gunicorn`.
 - Repositorio configurado como `origin`: `https://github.com/wAstralChxrry/Proyecto-Arriendo-de-Maquinaria-de-Construccion`.
-- El checkout tiene cambios locales sin commit y algunos archivos modificados vienen de trabajo anterior. Revisar `git status` y el diff antes de preparar un commit; no agregar todos los cambios a ciegas.
-- GitHub CLI (`gh`) está instalado, pero todavía no hay una sesión autenticada. El remoto existe; falta autorizar una cuenta con permiso de escritura para poder preparar un commit/push.
-- No hay commits nuevos ni push realizados. Antes de preparar el commit, revisar el diff y excluir `.taste-skill/` (archivos temporales) y cualquier configuración privada/local, en especial `renting_maquinaria/settings.py`.
-- Para autorizar: ejecutar `gh auth login --hostname github.com --git-protocol https --web`, abrir `https://github.com/login/device`, ingresar el código temporal que muestre la terminal y aprobar el acceso en la cuenta con permiso de escritura al repositorio. No compartir PAT ni contraseña por chat.
+- Remoto: `https://github.com/wAstralChxrry/Proyecto-Arriendo-de-Maquinaria-de-Construccion`, rama principal `master`.
+- GitHub CLI (`gh`) está instalado y se autenticó con la cuenta `wAstralChxrry`. No solicitar ni copiar tokens o contraseñas por chat.
+- Para cambios siguientes: empezar con `git status -sb`, trabajar desde `master`, revisar `git diff`, crear un commit y hacer push normal. No hace falta otro force push para el estado actual.
+- La carpeta del checkout es también la ruta de la aplicación en la instancia. Después de cambios backend, reiniciar `sudo systemctl restart gunicorn` y verificar con `systemctl is-active gunicorn`; Nginx sirve los activos y normalmente no requiere reinicio para cambios de HTML/CSS.
 
 ## Cambios relacionados recientes
 
@@ -36,3 +45,4 @@
 - Marca renovada de MaquiRent a Terra Works en portada, modales, carro y 404.
 - Activos CSS/JS usan rutas absolutas para que también carguen desde `/carrito/`.
 - Referencia detallada del proyecto y operación: `README.md` y `DOCUMENTACION.md`.
+- Preferencia del usuario para el producto: textos naturales y profesionales, sin frases de marketing genéricas ni apariencia de plantilla de IA; la marca es Terra Works.
