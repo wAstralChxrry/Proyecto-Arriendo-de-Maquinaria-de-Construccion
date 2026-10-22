@@ -4,8 +4,8 @@
 
 ## Punto de continuación
 
-- La rama `origin/master` quedó reemplazada intencionalmente por el contenido funcional de este checkout. HEAD publicado: `d548ed5` (`Complete Webpay demo flow and refresh frontend`). El push fue forzado por instrucción explícita del usuario. Los commits que antes estaban en `master` ya no forman parte de esa rama.
-- El árbol de trabajo quedó limpio después del push. `master` y `respaldo-webpay` apuntan a `d548ed5`; `integrar-webpay` es una rama local antigua y divergente: no trabajar desde ella ni publicarla sin revisar su historial.
+- La rama `origin/master` quedó reemplazada intencionalmente por el contenido funcional del checkout. El código de la aplicación quedó en `d548ed5` (`Complete Webpay demo flow and refresh frontend`), seguido por commits pequeños que actualizan esta nota de continuidad. El primer push fue forzado por instrucción explícita del usuario. Los commits que antes estaban en `master` ya no forman parte de esa rama.
+- Trabajar desde `master`, que sigue a `origin/master`; el árbol de trabajo está limpio. `respaldo-webpay` conserva el estado inmediatamente posterior al reemplazo. `integrar-webpay` es una rama local antigua y divergente: no trabajar desde ella ni publicarla sin revisar su historial.
 - El servidor `http://100.61.233.219/` fue consultado después del push: devolvió el título Terra Works y el HTML del hero nuevo. Gunicorn y Nginx figuraban activos. El CSS público respondió HTTP 200 y coincidió con el archivo local.
 - No se completó el flujo de pago manual en navegador. La creación de transacción Webpay en integración sí respondió con URL y token; no se usó una tarjeta ni hubo cargo.
 - El cambio a `master` no significa que se haya completado un pago de prueba ni valida todo el recorrido del cliente. Para verificarlo, usar una cuenta de prueba y las tarjetas/documentación vigentes de Transbank.
