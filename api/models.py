@@ -59,6 +59,7 @@ class Contrato(models.Model):
     """Orden histórica con estados válidos del ciclo de arriendo."""
     ESTADOS = (
         ('PENDIENTE', 'Pendiente'),
+        ('APROBADO', 'Aprobado'),
         ('PAGADO', 'Pagado'),
         ('ENTREGADO', 'Entregado'),
         ('COMPLETADO', 'Completado'),
@@ -69,6 +70,10 @@ class Contrato(models.Model):
     estado = models.CharField(max_length=15, choices=ESTADOS, default='PENDIENTE')
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     total = models.DecimalField(max_digits=12, decimal_places=2)
+    referencia_pago = models.CharField(max_length=32, blank=True, default='')
+    webpay_token = models.CharField(max_length=64, blank=True, default='')
+    webpay_url = models.URLField(max_length=255, blank=True, default='')
+    webpay_token_created_at = models.DateTimeField(null=True, blank=True)
 
 class DetalleContrato(models.Model):
     """Conserva máquina, período y subtotal de cada contrato."""

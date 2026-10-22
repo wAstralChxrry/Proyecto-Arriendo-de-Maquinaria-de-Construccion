@@ -26,10 +26,22 @@ FRONTEND_INDEX = os.path.join(FRONTEND_DIR, 'index.html')
 
 def frontend_view(request):
     with open(FRONTEND_INDEX, 'r', encoding='utf-8') as f:
-        return HttpResponse(f.read(), content_type='text/html')
+        response = HttpResponse(f.read(), content_type='text/html')
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
+
+def custom_404(request, exception):
+    error_page = os.path.join(FRONTEND_DIR, '404.html')
+    with open(error_page, 'r', encoding='utf-8') as f:
+        return HttpResponse(f.read(), content_type='text/html', status=404)
+
+handler404 = custom_404
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('carrito/', frontend_view, name='cart-page'),
     path('', frontend_view, name='frontend'),
     path('', include('api.urls')),
     # Exposición de Swagger/OpenAPI

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#f2f0e9" />
+  <title>404 | Terra Works</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f2f0e9;
+      --paper-deep: #e8e5dc;
+      --ink: #202725;
+      --ink-soft: #4f5954;
+      --muted: #78817a;
+      --orange: #e96d28;
+      --orange-dark: #bd4b19;
+      --green: #466b50;
+      --sans: "Aptos", "Segoe UI", Arial, sans-serif;
+      --display: "Arial Narrow", "Aptos Display", "Segoe UI", sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    a:focus-visible { outline: 3px solid var(--orange); outline-offset: 4px; }
+    .masthead, .footer { padding-inline: max(24px, calc((100vw - 1260px) / 2)); }
+    .masthead { min-height: 78px; display: flex; align-items: center; border-bottom: 1px solid #d7d6cd; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-size: 1.05rem; letter-spacing: -.04em; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; transform: skew(-5deg); color: #fff; background: var(--orange); font: 900 1.18rem var(--display); letter-spacing: -.08em; }
+    .brand strong { font-weight: 850; }
+    main { width: min(1260px, calc(100% - 48px)); margin: auto; padding-block: clamp(54px, 10vh, 112px); }
+    .error-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .78fr); align-items: center; gap: clamp(36px, 8vw, 110px); }
+    .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--orange-dark); font-size: .68rem; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
+    .eyebrow::before { width: 8px; height: 8px; border-radius: 50%; background: var(--green); content: ""; }
+    h1 { max-width: 700px; margin: 18px 0 20px; font: 850 clamp(3.4rem, 8vw, 7.3rem)/.89 var(--display); letter-spacing: -.075em; }
+    h1 span { color: var(--orange-dark); }
+    .message { max-width: 490px; margin: 0; color: var(--ink-soft); font-size: clamp(1rem, 1.5vw, 1.12rem); line-height: 1.65; }
+    .actions { display: flex; flex-wrap: wrap; gap: 11px; margin-top: 30px; }
+    .button { min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 0 17px; border: 1px solid var(--ink); font-size: .78rem; font-weight: 800; transition: background .18s, color .18s, border-color .18s; }
+    .button-primary { border-color: var(--orange); color: white; background: var(--orange); }
+    .button-primary:hover { border-color: var(--orange-dark); background: var(--orange-dark); }
+    .button-secondary { background: transparent; }
+    .button-secondary:hover { color: white; background: var(--ink); }
+    .button:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+    .site-sketch { position: relative; min-height: 350px; display: grid; place-items: center; overflow: hidden; background: var(--paper-deep); }
+    .site-sketch::before, .site-sketch::after { position: absolute; content: ""; }
+    .site-sketch::before { inset: 0; background: repeating-linear-gradient(0deg, transparent 0 39px, rgba(32,39,37,.08) 40px), repeating-linear-gradient(90deg, transparent 0 39px, rgba(32,39,37,.08) 40px); }
+    .route { position: relative; width: min(74%, 285px); aspect-ratio: 1; border: 1px solid rgba(32,39,37,.23); transform: rotate(-8deg); }
+    .route::before, .route::after { position: absolute; background: var(--paper-deep); content: ""; }
+    .route::before { top: 47%; right: -12%; left: -12%; height: 34px; border-block: 1px solid rgba(32,39,37,.3); }
+    .route::after { top: -12%; bottom: -12%; left: 46%; width: 34px; border-inline: 1px solid rgba(32,39,37,.3); }
+    .route-label { position: absolute; z-index: 1; top: 50%; left: 50%; width: 94px; height: 94px; display: grid; place-items: center; transform: translate(-50%, -50%); color: #fff; background: var(--orange); font: 900 2rem var(--display); letter-spacing: -.08em; }
+    .map-note { position: absolute; right: 17px; bottom: 15px; color: var(--ink-soft); font-size: .62rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .footer { min-height: 57px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid #d7d6cd; color: var(--muted); font-size: .68rem; }
+    .footer span:first-child { color: var(--ink-soft); font-weight: 800; letter-spacing: .1em; }
+    @media (max-width: 720px) {
+      .error-layout { grid-template-columns: 1fr; }
+      .site-sketch { min-height: 240px; }
+      .route { width: min(58%, 210px); }
+      .footer { align-items: flex-start; flex-direction: column; justify-content: center; padding-block: 15px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="/" aria-label="Terra Works, ir al inicio"><span class="brand-mark" aria-hidden="true">TW</span><span>Terra <strong>Works</strong></span></a>
+  </header>
+  <main>
+    <section class="error-layout" aria-labelledby="error-title">
+      <div>
+        <span class="eyebrow">TERRA WORKS / DESVÍO DE RUTA</span>
+        <h1 id="error-title">Esta ruta<br /><span>no existe.</span></h1>
+        <p class="message">Parece que el enlace quedó fuera de plano. Vuelve a la portada para encontrar maquinaria y continuar con tu arriendo.</p>
+        <nav class="actions" aria-label="Opciones">
+          <a class="button button-primary" href="/">Volver a la portada <span aria-hidden="true">↗</span></a>
+          <a class="button button-secondary" href="/carrito/">Ir a mi carro <span aria-hidden="true">→</span></a>
+        </nav>
+      </div>
+      <div class="site-sketch" aria-hidden="true">
+        <div class="route"><span class="route-label">404</span></div>
+        <span class="map-note">TERRA WORKS · RUTA NO ENCONTRADA</span>
+      </div>
+    </section>
+  </main>
+  <footer class="footer"><span>TERRA WORKS / EQUIPOS PARA OBRA</span><span>Volvamos a poner la obra en marcha.</span></footer>
+</body>
+</html>

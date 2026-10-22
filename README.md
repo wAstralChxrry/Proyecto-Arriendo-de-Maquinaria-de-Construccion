@@ -79,8 +79,10 @@ En una base de datos nueva, este comando carga el catálogo de ejemplo con sus f
 | Recurso | URL |
 |---|---|
 | Frontend | http://127.0.0.1:8000/ |
+| Carro de arriendo | http://127.0.0.1:8000/carrito/ |
 | API Docs (Swagger) | http://127.0.0.1:8000/api/docs/ |
 | Catálogo Maquinarias | http://127.0.0.1:8000/api/maquinarias/ |
+| Retorno Webpay | http://127.0.0.1:8000/webpay/retorno/ |
 | Login JWT | http://127.0.0.1:8000/api/token/ |
 | Admin Django | http://127.0.0.1:8000/admin/ |
 
@@ -93,9 +95,9 @@ En una base de datos nueva, este comando carga el catálogo de ejemplo con sus f
 3. Copiar el valor de `access` del response
 4. En Swagger: presionar **Authorize** e ingresar `Bearer <token>`
 
-### Probar dos empresas en paralelo
+### Sesión y cuentas
 
-Abre el sitio en dos ventanas del navegador e inicia sesión en cada una con una cuenta `CLIENTE` distinta. El token se guarda por pestaña, así que iniciar sesión en una ventana no reemplaza la sesión de la otra. Cada carro se carga y se guarda en PostgreSQL asociado a la cuenta autenticada; los ítems y contratos de una empresa no se muestran a la otra.
+La sesión se conserva al recargar la página mediante almacenamiento local del navegador y se renueva con el token JWT de actualización. Cada carro se guarda en PostgreSQL y está asociado a una sola cuenta autenticada.
 
 ---
 
@@ -108,7 +110,9 @@ Abre el sitio en dos ventanas del navegador e inicia sesión en cada una con una
 - **Filtros:** django-filter sobre catálogo de maquinarias
 - **Carrito:** Persistente en DB mediante relación `OneToOneField`
 - **Seguimiento del cliente:** Cada empresa consulta el estado, folio, fechas y equipos de sus propios contratos desde **Mis arriendos**.
-- **Stock:** Descuento atómico (`transaction.atomic`) al estado `PAGADO`
+- **Stock:** La aprobación ejecutiva no descuenta unidades. El inventario se descuenta de forma atómica después de que Transbank confirma un pago autorizado.
+- **Pago:** Webpay Plus en ambiente de integración mediante el SDK oficial `transbank-sdk`. El cliente pasa desde Terra Works al formulario de Webpay y vuelve a `/webpay/retorno/`; esa ruta confirma la transacción con Transbank antes de marcar el contrato `PAGADO`. Las credenciales de integración incluidas por el SDK son solo para pruebas y no procesan cobros reales.
+- **Retorno de pago:** para un dominio distinto al host recibido, define `WEBPAY_RETURN_URL` en el servicio Django con la URL pública completa que termina en `/webpay/retorno/`.
 - **Contratos:** Cada orden tiene un folio UUID único además de su ID interno. El UUID se asigna también a contratos existentes mediante una migración.
 
 ---
@@ -117,8 +121,8 @@ Abre el sitio en dos ventanas del navegador e inicia sesión en cada una con una
 
 | Rol | Permisos |
 |---|---|
-| `CLIENTE` (Empresa Constructora) | Ver catálogo, gestionar su carro, confirmar contratos y consultar sus contratos |
-| `ADMIN` (Ejecutivo de Arriendos) | Gestionar maquinaria, consultar contratos y actualizar sus estados |
+| `CLIENTE` (Empresa Constructora) | Ver catálogo, gestionar su carro, enviar solicitudes, pagar en Webpay integración y consultar sus contratos |
+| `ADMIN` (Ejecutivo de Arriendos) | Gestionar maquinaria, consultar contratos y aprobar o actualizar sus estados |
 
 ---
 

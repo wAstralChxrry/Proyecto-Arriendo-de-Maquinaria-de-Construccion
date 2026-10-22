@@ -1,10 +1,11 @@
 /* ============================================================
-   MAQUIRENT - LÓGICA DE LA APLICACIÓN FRONTEND
+   TERRA WORKS - LÓGICA DE LA APLICACIÓN FRONTEND
    Conecta con el backend Django REST Framework mediante fetch()
    ============================================================ */
 
 // La página se sirve desde Django para que la API use el mismo origen y no falle por CORS.
 const API_BASE = window.location.origin;
+const CART_PAGE_MODE = window.location.pathname.replace(/\/+$/, '') === '/carrito';
 
 // El API es la fuente de inventario e imagen; esta imagen solo cubre equipos sin foto.
 const FALLBACK_MACHINE_IMAGE = 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=900&auto=format&fit=crop&q=82';
@@ -14,11 +15,44 @@ const MACHINE_CATALOG = [];
 let currentFilter = 'all';
 let currentSearch = '';
 let cart = [];
-// sessionStorage mantiene una sesión por pestaña; cada carro sigue persistido por usuario en la base de datos.
-let authToken = sessionStorage.getItem('maquirent_access_token');
-let refreshToken = sessionStorage.getItem('maquirent_refresh_token');
+// localStorage mantiene la sesión entre recargas y navegación; migra tokens de sesiones anteriores.
+const AUTH_STORAGE_KEYS = ['maquirent_access_token', 'maquirent_refresh_token', 'maquirent_username'];
+function persistAuthSession(access, refresh, username = localStorage.getItem('maquirent_username') || sessionStorage.getItem('maquirent_username')) {
+  authToken = access;
+  refreshToken = refresh;
+  if (access) localStorage.setItem('maquirent_access_token', access);
+  if (refresh) localStorage.setItem('maquirent_refresh_token', refresh);
+  if (username) localStorage.setItem('maquirent_username', username);
+  if (access) sessionStorage.setItem('maquirent_access_token', access);
+  if (refresh) sessionStorage.setItem('maquirent_refresh_token', refresh);
+  if (username) sessionStorage.setItem('maquirent_username', username);
+}
+function clearAuthSession() {
+  authToken = null;
+  refreshToken = null;
+  AUTH_STORAGE_KEYS.forEach(key => {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  });
+}
+let authToken = localStorage.getItem('maquirent_access_token') || sessionStorage.getItem('maquirent_access_token');
+let refreshToken = localStorage.getItem('maquirent_refresh_token') || sessionStorage.getItem('maquirent_refresh_token');
+if (authToken && refreshToken) persistAuthSession(authToken, refreshToken);
+let refreshInFlight = null;
 let selectedMachine = null;
 let lastModalTrigger = null;
+let demoPaymentContractId = null;
+
+function configureCartPage() {
+  if (!CART_PAGE_MODE) return;
+  document.body.classList.add('cart-page-mode');
+  document.querySelectorAll('.hero, #mis-arriendos, #adminPanel, #catalogo, #como-funciona, .footer, .nav-links').forEach(element => {
+    element.hidden = true;
+  });
+  document.getElementById('cartPage').hidden = false;
+  document.getElementById('cartBtn').hidden = true;
+}
+configureCartPage();
 
 // ===== UTILIDADES =====
 const fmt = (n) => `$${Number(n).toLocaleString('es-CL')}`;
@@ -49,9 +83,9 @@ function updateAccountInterface() {
   document.getElementById('loginBtn').textContent = authToken ? 'Cerrar sesión' : 'Iniciar sesión';
   document.getElementById('adminNavItem').hidden = !executive;
   document.getElementById('customerOrdersNavItem').hidden = !customer;
-  document.getElementById('mis-arriendos').hidden = !customer;
-  document.getElementById('adminPanel').hidden = !executive;
-  document.getElementById('cartBtn').hidden = executive;
+  document.getElementById('mis-arriendos').hidden = CART_PAGE_MODE || !customer;
+  document.getElementById('adminPanel').hidden = CART_PAGE_MODE || !executive;
+  document.getElementById('cartBtn').hidden = CART_PAGE_MODE || executive;
   document.getElementById('registerBtn').style.display = authToken ? 'none' : '';
   if (!customer) document.getElementById('customerOrders').innerHTML = '';
   if (!executive) {
@@ -70,22 +104,50 @@ async function apiFetch(url, options = {}) {
   const send = () => fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${authToken}` } });
   let response = await send();
   if (response.status !== 401 || !refreshToken) return response;
-  const refreshed = await fetch(`${API_BASE}/api/token/refresh/`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh: refreshToken })
-  });
-  if (!refreshed.ok) {
-    authToken = null; refreshToken = null;
-    sessionStorage.removeItem('maquirent_access_token'); sessionStorage.removeItem('maquirent_refresh_token');
-    sessionStorage.removeItem('maquirent_username');
+
+  // Requests made together after a reload share one refresh attempt.
+  if (!refreshInFlight) {
+    const tokenToRefresh = refreshToken;
+    refreshInFlight = fetch(`${API_BASE}/api/token/refresh/`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh: tokenToRefresh })
+    }).then(async refreshed => ({
+      status: refreshed.status,
+      ok: refreshed.ok,
+      tokens: refreshed.ok ? await refreshed.json() : null
+    }));
+  }
+
+  let refreshed;
+  try {
+    refreshed = await refreshInFlight;
+  } catch (error) {
+    // A transient network failure must not erase a still-valid local session.
+    throw new Error('No se pudo renovar la sesión. Comprueba tu conexión e intenta de nuevo.');
+  } finally {
+    refreshInFlight = null;
+  }
+
+  if (!refreshed.ok && [400, 401].includes(refreshed.status)) {
+    clearAuthSession();
     cart = [];
     updateAccountInterface();
     updateCartBadge();
+    if (CART_PAGE_MODE) renderCart();
     throw new Error('La sesión venció. Inicia sesión otra vez.');
   }
-  const tokens = await refreshed.json();
-  authToken = tokens.access;
-  sessionStorage.setItem('maquirent_access_token', authToken);
-  return send();
+  if (!refreshed.ok) throw new Error('El servidor no pudo renovar la sesión. Intenta de nuevo.');
+
+  const tokens = refreshed.tokens;
+  persistAuthSession(tokens.access, tokens.refresh || refreshToken);
+  response = await send();
+  if (response.status === 401) {
+    clearAuthSession();
+    cart = [];
+    updateAccountInterface();
+    updateCartBadge();
+    if (CART_PAGE_MODE) renderCart();
+  }
+  return response;
 }
 
 function showToast(msg, type = 'success') {
@@ -104,6 +166,7 @@ function openModal(id) {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('active');
+  if (id === 'demoPaymentModal') demoPaymentContractId = null;
   if (!document.querySelector('.modal-overlay.active')) document.body.classList.remove('modal-open');
   lastModalTrigger?.focus?.();
 }
@@ -135,24 +198,25 @@ function renderCatalog(filter = 'all') {
   grid.innerHTML = filtered.map(machine => {
     const stockOk = machine.stock_disponible > 0;
     return `
-      <div class="machine-card" data-cat="${escapeHtml(machine.categoria)}">
+      <article class="machine-card" data-cat="${escapeHtml(machine.categoria)}">
         <div class="card-img-wrapper">
           <img src="${machine.img}" alt="${escapeHtml(machine.nombre)}" loading="lazy" />
-          <span class="card-badge">${escapeHtml(machine.categoria)}</span>
-          <span class="card-stock ${stockOk ? 'stock-ok' : 'stock-out'}">
-            ${stockOk ? `${machine.stock_disponible} disponibles` : 'Sin stock'}
-          </span>
         </div>
-        <div class="card-body">
+        <div class="card-main">
+          <p class="card-category">${escapeHtml(machine.categoria)}</p>
           <h3 class="card-title">${escapeHtml(machine.nombre)}</h3>
-          <div class="card-price-row"><p class="card-tarifa">${fmt(machine.tarifa_diaria)} <span>/ día</span></p><p class="card-garantia">Garantía<br>${fmt(machine.garantia_fija)}</p></div>
-          <button class="card-add-btn" 
+          <p class="card-availability ${stockOk ? 'stock-ok' : 'stock-out'}"><span aria-hidden="true"></span>${stockOk ? `${machine.stock_disponible} ${machine.stock_disponible === 1 ? 'unidad disponible' : 'unidades disponibles'}` : 'Sin unidades disponibles'}</p>
+        </div>
+        <div class="card-pricing">
+          <p class="card-tarifa">${fmt(machine.tarifa_diaria)} <span>/ día</span></p>
+          <p class="card-garantia">Garantía <strong>${fmt(machine.garantia_fija)}</strong></p>
+        </div>
+        <button class="card-add-btn"
             onclick="handleAddClick(${machine.id})"
             ${!stockOk ? 'disabled' : ''} ${isExecutiveSession() ? 'hidden' : ''}>
-            ${stockOk ? '+ Agregar al Carro' : 'Sin Disponibilidad'}
+            ${stockOk ? 'Elegir fechas' : 'Agotado'} <span aria-hidden="true">→</span>
           </button>
-        </div>
-      </div>
+      </article>
     `;
   }).join('');
 }
@@ -282,12 +346,32 @@ function updateCartBadge() {
 function renderCart() {
   const listEl = document.getElementById('cartItems');
   const totalEl = document.getElementById('cartTotal');
+  const countEl = document.getElementById('cartPageCount');
+  const checkoutButton = document.getElementById('checkoutBtn');
+  const loginButton = document.getElementById('cartPageLogin');
+  const executiveNote = document.getElementById('cartExecutiveNote');
+  const customer = Boolean(authToken) && !isExecutiveSession();
+  const executive = Boolean(authToken) && isExecutiveSession();
+
+  loginButton.hidden = Boolean(authToken);
+  executiveNote.hidden = !executive;
+  checkoutButton.hidden = !customer;
+
+  if (!customer) {
+    listEl.innerHTML = executive
+      ? '<div class="cart-empty">El carro de arriendo está disponible para cuentas de empresa.</div>'
+      : '<div class="cart-empty">Inicia sesión con tu cuenta de empresa para consultar el carro guardado.</div>';
+    totalEl.textContent = '$0';
+    countEl.textContent = '0 equipos';
+    checkoutButton.disabled = true;
+    return;
+  }
 
   if (cart.length === 0) {
     listEl.innerHTML = '<div class="cart-empty">Tu carro está vacío. Agrega un equipo y vuelve aquí cuando quieras.</div>';
     totalEl.textContent = '$0';
-    document.getElementById('cartModalCount').textContent = '0 equipos';
-    document.getElementById('checkoutBtn').disabled = true;
+    countEl.textContent = '0 equipos';
+    checkoutButton.disabled = true;
     return;
   }
 
@@ -298,23 +382,20 @@ function renderCart() {
         <p>${item.inicio} → ${item.fin} · ${item.dias} días</p>
       </div>
       <span class="cart-item-price">${fmt(item.costo)}</span>
-      <button class="cart-remove" type="button" aria-label="Quitar ${escapeHtml(item.machine.nombre)}" onclick="removeCartItem(${Number(item.id)})">Quitar</button>
+      <button class="cart-remove" type="button" aria-label="Quitar ${escapeHtml(item.machine.nombre)}" data-remove-cart-item="${Number(item.id)}">Quitar</button>
     </div>
   `).join('');
 
   const total = cart.reduce((acc, i) => acc + Number(i.costo), 0);
   totalEl.textContent = fmt(total);
-  document.getElementById('cartModalCount').textContent = `${cart.length} ${cart.length === 1 ? 'equipo' : 'equipos'}`;
-  document.getElementById('checkoutBtn').disabled = false;
+  countEl.textContent = `${cart.length} ${cart.length === 1 ? 'equipo' : 'equipos'}`;
+  checkoutButton.disabled = false;
 }
 
-// ===== BOTÓN CARRO =====
-document.getElementById('cartBtn').addEventListener('click', async () => {
-  if (requireConnectedSite()) return;
-  if (!authToken) { openModal('loginModal'); showToast('Inicia sesión para ver tu carro guardado.', 'error'); return; }
-  await fetchCartFromBackend();
-  renderCart();
-  openModal('cartModal');
+document.getElementById('cartPageLogin').addEventListener('click', () => openModal('loginModal'));
+document.getElementById('cartItems').addEventListener('click', event => {
+  const button = event.target.closest('[data-remove-cart-item]');
+  if (button) removeCartItem(Number(button.dataset.removeCartItem));
 });
 
 // ===== CHECKOUT =====
@@ -335,10 +416,9 @@ document.getElementById('checkoutBtn').addEventListener('click', async () => {
       await fetchCartFromBackend();
       await fetchCatalog();
       updateCartBadge();
-      closeModal('cartModal');
+      renderCart();
       showToast(`Contrato generado. Folio: ${contrato.codigo_uuid}. Estado: PENDIENTE.`);
       await fetchCustomerContracts();
-      document.getElementById('mis-arriendos').scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
     const error = await res.json();
@@ -361,11 +441,10 @@ window.removeCartItem = removeCartItem;
 document.getElementById('loginBtn').addEventListener('click', () => {
   if (requireConnectedSite()) return;
   if (authToken) {
-    authToken = null; refreshToken = null; cart = [];
-    sessionStorage.removeItem('maquirent_access_token'); sessionStorage.removeItem('maquirent_refresh_token'); sessionStorage.removeItem('maquirent_username');
+    clearAuthSession(); cart = [];
     document.getElementById('loginBtn').textContent = 'Iniciar sesión';
       updateAccountInterface();
-    updateCartBadge(); showToast('Sesión cerrada. Tu carro queda guardado en tu cuenta.');
+    updateCartBadge(); renderCart(); showToast('Sesión cerrada. Tu carro queda guardado en tu cuenta.');
     return;
   }
   openModal('loginModal');
@@ -410,15 +489,13 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
       session = await sessionResponse.json();
     } catch (sessionError) { /* La cuenta ya se creó; ofrecer login manual si falla la sesión automática. */ }
     if (sessionResponse?.ok) {
-      authToken = session.access; refreshToken = session.refresh;
-      sessionStorage.setItem('maquirent_access_token', authToken);
-      sessionStorage.setItem('maquirent_refresh_token', refreshToken);
-      sessionStorage.setItem('maquirent_username', payload.username);
+      persistAuthSession(session.access, session.refresh, payload.username);
       closeModal('registerModal');
       document.getElementById('loginBtn').textContent = 'Cerrar sesión';
       updateAccountInterface();
       await fetchCartFromBackend();
       await fetchCustomerContracts();
+      renderCart();
       showToast('Cuenta creada. Ya puedes armar tu solicitud.');
     } else {
       closeModal('registerModal');
@@ -450,11 +527,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     const data = await res.json();
 
     if (res.ok) {
-      authToken = data.access;
-      refreshToken = data.refresh;
-      sessionStorage.setItem('maquirent_access_token', authToken);
-      sessionStorage.setItem('maquirent_refresh_token', refreshToken);
-      sessionStorage.setItem('maquirent_username', username);
+      persistAuthSession(data.access, data.refresh, username);
       closeModal('loginModal');
       document.getElementById('loginBtn').textContent = 'Cerrar sesión';
       updateAccountInterface();
@@ -464,6 +537,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       else {
         await fetchCartFromBackend();
         await fetchCustomerContracts();
+        renderCart();
       }
     } else {
       errEl.textContent = 'Usuario o contraseña incorrectos.';
@@ -495,6 +569,7 @@ async function fetchCartFromBackend() {
         costo: Number(item.costo_calculado)
       }));
       updateCartBadge();
+      if (CART_PAGE_MODE) renderCart();
     }
   } catch (err) { showToast('No se pudo cargar el carro guardado.', 'error'); }
 }
@@ -503,7 +578,7 @@ async function fetchCartFromBackend() {
 async function fetchCatalog() {
   if (isLocalFile()) {
     document.getElementById('localModeNote').hidden = false;
-    document.getElementById('catalogGrid').innerHTML = '<p class="catalog-message">Abre MaquiRent desde <strong>http://127.0.0.1:8000/</strong> para conectar con el inventario y usar tu cuenta.</p>';
+    document.getElementById('catalogGrid').innerHTML = '<p class="catalog-message">Abre Terra Works desde <strong>http://127.0.0.1:8000/</strong> para conectar con el inventario y usar tu cuenta.</p>';
     document.getElementById('catalogCount').textContent = 'API no conectada';
     return;
   }
@@ -516,6 +591,19 @@ async function fetchCatalog() {
       ...machine,
       img: machine.imagen_url || FALLBACK_MACHINE_IMAGE
     })));
+    const availableMachines = MACHINE_CATALOG.filter(machine => Number(machine.stock_disponible) > 0);
+    const startingRate = availableMachines.length
+      ? Math.min(...availableMachines.map(machine => Number(machine.tarifa_diaria)))
+      : null;
+    document.getElementById('heroMachineCount').textContent = `${MACHINE_CATALOG.length}`;
+    document.getElementById('heroStartingRate').textContent = startingRate === null ? 'Consultar' : `${fmt(startingRate)}`;
+    const featured = availableMachines.find(machine => machine.imagen_url) || MACHINE_CATALOG.find(machine => machine.imagen_url);
+    if (featured) {
+      const heroImage = document.querySelector('.hero-img');
+      heroImage.src = featured.imagen_url;
+      heroImage.alt = `${featured.nombre} · ${featured.categoria}`;
+      document.getElementById('heroMachineName').textContent = featured.nombre.toLocaleUpperCase('es-CL');
+    }
     renderFilters();
     renderCatalog(currentFilter);
   } catch (err) {
@@ -531,16 +619,18 @@ function restoreSession() {
 }
 
 const contractTransitions = {
-  PENDIENTE: [['PAGADO', 'Confirmar pago'], ['CANCELADO', 'Cancelar']],
+  PENDIENTE: [['APROBADO', 'Aprobar arriendo'], ['CANCELADO', 'Cancelar']],
+  APROBADO: [['CANCELADO', 'Cancelar']],
   PAGADO: [['ENTREGADO', 'Marcar entregado'], ['CANCELADO', 'Cancelar']],
   ENTREGADO: [['COMPLETADO', 'Marcar completado'], ['CANCELADO', 'Cancelar']]
 };
 const contractStateLabels = {
-  PENDIENTE: 'Pendiente', PAGADO: 'Pagado', ENTREGADO: 'Entregado',
+  PENDIENTE: 'Pendiente', APROBADO: 'Aprobado', PAGADO: 'Pagado', ENTREGADO: 'Entregado',
   COMPLETADO: 'Completado', CANCELADO: 'Cancelado'
 };
 const customerStateDescriptions = {
-  PENDIENTE: 'Solicitud recibida. El ejecutivo debe revisar y confirmar el arriendo.',
+  PENDIENTE: 'Solicitud recibida. El ejecutivo debe revisar el arriendo.',
+  APROBADO: 'Arriendo aprobado. Completa el pago de prueba para reservar las unidades.',
   PAGADO: 'Pago confirmado. El equipo quedó reservado para las fechas indicadas.',
   ENTREGADO: 'Equipo entregado. El período de arriendo está en curso.',
   COMPLETADO: 'Arriendo finalizado y equipo devuelto.',
@@ -561,7 +651,7 @@ async function fetchCustomerContracts() {
       return;
     }
 
-    const stages = ['PENDIENTE', 'PAGADO', 'ENTREGADO', 'COMPLETADO'];
+    const stages = ['PENDIENTE', 'APROBADO', 'PAGADO', 'ENTREGADO', 'COMPLETADO'];
     list.innerHTML = [...contracts].sort((first, second) => Number(second.id) - Number(first.id)).map(order => {
       const state = contractStateLabels[order.estado] || order.estado;
       const stageIndex = stages.indexOf(order.estado);
@@ -579,6 +669,8 @@ async function fetchCustomerContracts() {
         ${progress}
         <ul class="customer-order-details">${details || '<li>Sin equipos asociados.</li>'}</ul>
         <div class="customer-order-total"><span>Total del contrato</span><strong>${fmt(order.total)}</strong></div>
+        ${order.estado === 'APROBADO' ? `<button class="btn-primary demo-pay-trigger" type="button" data-demo-payment="${Number(order.id)}" data-demo-total="${Number(order.total)}">Pagar en Webpay (pruebas) <span aria-hidden="true">→</span></button>` : ''}
+        ${order.referencia_pago ? `<p class="payment-reference">Pago confirmado por Webpay · Referencia <strong>${escapeHtml(order.referencia_pago)}</strong></p>` : ''}
       </article>`;
     }).join('');
   } catch (error) {
@@ -596,9 +688,11 @@ async function fetchAdminOrders() {
     const contracts = Array.isArray(payload) ? payload : payload.results || [];
     document.getElementById('adminOrderCount').textContent = contracts.length;
     const pending = contracts.filter(order => order.estado === 'PENDIENTE').length;
+    const awaitingPayment = contracts.filter(order => order.estado === 'APROBADO').length;
     const active = contracts.filter(order => ['PAGADO', 'ENTREGADO'].includes(order.estado)).length;
     document.getElementById('adminStats').innerHTML = `
       <div class="admin-stat"><strong>${pending}</strong><span>Pendientes</span></div>
+      <div class="admin-stat"><strong>${awaitingPayment}</strong><span>Por pagar</span></div>
       <div class="admin-stat"><strong>${active}</strong><span>En curso</span></div>
       <div class="admin-stat"><strong>${contracts.length}</strong><span>Contratos</span></div>`;
 
@@ -623,6 +717,7 @@ async function fetchAdminOrders() {
         <span class="admin-order-status status-${String(order.estado).toLowerCase()}">${escapeHtml(state)}</span></div>
         <div class="admin-order-detail">${details || 'Sin equipos asociados.'}</div>
         <div class="admin-order-total">Total: ${fmt(order.total)}</div>
+        ${order.referencia_pago ? `<p class="payment-reference">Pago Webpay (integración) · Ref. <strong>${escapeHtml(order.referencia_pago)}</strong></p>` : ''}
         ${actions ? `<div class="admin-order-actions">${actions}</div>` : ''}
       </article>`;
     }).join('');
@@ -677,6 +772,55 @@ document.getElementById('adminOrders').addEventListener('click', event => {
   const button = event.target.closest('[data-order-id]');
   if (button) changeContractState(Number(button.dataset.orderId), button.dataset.nextState, button);
 });
+
+function openDemoPayment(contractId, total) {
+  demoPaymentContractId = contractId;
+  document.getElementById('demoPaymentContract').textContent = `#${contractId}`;
+  document.getElementById('demoPaymentAmount').textContent = fmt(total);
+  document.getElementById('demoPaymentError').textContent = '';
+  openModal('demoPaymentModal');
+}
+
+document.getElementById('customerOrders').addEventListener('click', event => {
+  const button = event.target.closest('[data-demo-payment]');
+  if (button) openDemoPayment(Number(button.dataset.demoPayment), Number(button.dataset.demoTotal));
+});
+
+async function payDemoContract() {
+  if (!demoPaymentContractId) return;
+  const button = document.getElementById('demoPayButton');
+  const error = document.getElementById('demoPaymentError');
+  button.disabled = true;
+  error.textContent = '';
+  try {
+    const response = await apiFetch(`${API_BASE}/api/contratos/${demoPaymentContractId}/pago-demo/`, { method: 'POST' });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(errorText(payload));
+    closeModal('demoPaymentModal');
+    if (!payload.url || !payload.token) throw new Error('Webpay no devolvió los datos para iniciar el pago.');
+    if (new URL(payload.url).origin !== 'https://webpay3gint.transbank.cl') {
+      throw new Error('La dirección de pago no corresponde al ambiente de pruebas de Webpay.');
+    }
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = payload.url;
+    const tokenInput = document.createElement('input');
+    tokenInput.type = 'hidden';
+    tokenInput.name = 'token_ws';
+    tokenInput.value = payload.token;
+    form.append(tokenInput);
+    document.body.append(form);
+    form.submit();
+  } catch (err) {
+    error.textContent = err.message || 'No se pudo completar el pago de prueba.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+document.getElementById('demoPayButton').addEventListener('click', payDemoContract);
+document.getElementById('closeDemoPayment').addEventListener('click', () => closeModal('demoPaymentModal'));
+document.getElementById('cancelDemoPayment').addEventListener('click', () => closeModal('demoPaymentModal'));
 
 function resetAdminMachineForm() {
   document.getElementById('adminMachineForm').reset();
@@ -776,7 +920,6 @@ document.addEventListener('keydown', (event) => {
 
 // ===== CIERRE DE MODALES =====
 document.getElementById('closeLogin').addEventListener('click', () => closeModal('loginModal'));
-document.getElementById('closeCart').addEventListener('click', () => closeModal('cartModal'));
 document.getElementById('closeAddCart').addEventListener('click', () => closeModal('addCartModal'));
 
 // Cerrar al clicar el overlay
@@ -790,10 +933,29 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 
 // ===== INICIALIZACIÓN =====
 restoreSession();
+renderCart();
+const webpayOutcome = new URLSearchParams(window.location.search).get('pago');
+if (webpayOutcome) {
+  const messages = {
+    exitoso: ['Pago confirmado por Webpay.', 'success'],
+    rechazado: ['Webpay no aprobó el pago. Puedes intentarlo nuevamente.', 'error'],
+    cancelado: ['Cancelaste el pago. La solicitud sigue aprobada.', 'error'],
+    sin_stock: ['No quedó stock para las fechas solicitadas. Se solicitó la reversa del pago.', 'error'],
+    invalido: ['La solicitud cambió antes de confirmar el pago. Contacta al ejecutivo.', 'error'],
+    error: ['No se pudo confirmar el pago con Webpay. Actualiza tus solicitudes o inténtalo nuevamente.', 'error']
+  };
+  const [message, type] = messages[webpayOutcome] || messages.error;
+  showToast(message, type);
+  history.replaceState(null, '', `${window.location.pathname}#mis-arriendos`);
+}
 // Evita seleccionar fechas pasadas desde el navegador; el servidor repite esta validación.
 document.getElementById('fechaInicio').min = localISODate();
 document.getElementById('fechaFin').min = localISODate();
 fetchCatalog().then(() => {
+  if (CART_PAGE_MODE) {
+    if (authToken && !isExecutiveSession()) fetchCartFromBackend().then(renderCart);
+    return;
+  }
   if (!authToken) return;
   if (isExecutiveSession()) loadExecutiveDashboard();
   else {

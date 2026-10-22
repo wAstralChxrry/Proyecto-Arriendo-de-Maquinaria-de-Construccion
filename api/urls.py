@@ -5,7 +5,7 @@ Conecta los endpoints con sus respectivos ViewSets mediante el DefaultRouter de 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from api.views import MaquinariaViewSet, CarroViewSet, ContratoViewSet, RegistroViewSet
+from api.views import MaquinariaViewSet, CarroViewSet, ContratoViewSet, RegistroViewSet, webpay_return
 
 # El router expone las rutas permitidas por cada ViewSet.
 router = DefaultRouter()
@@ -14,6 +14,8 @@ router.register(r'carro-arriendo', CarroViewSet, basename='carro')
 router.register(r'contratos', ContratoViewSet, basename='contrato')
 
 urlpatterns = [
+    # Webpay retorna el token por POST para que el servidor confirme el resultado.
+    path('webpay/retorno/', webpay_return, name='webpay-return'),
     # Registro real desde la página; la API asigna siempre el rol de cliente.
     path('api/registro/', RegistroViewSet.as_view({'post': 'create'}), name='registro'),
     # Inclusión de todas las rutas generadas por el router

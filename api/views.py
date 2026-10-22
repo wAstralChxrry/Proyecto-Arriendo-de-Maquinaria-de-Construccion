@@ -8,10 +8,53 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from django.db import IntegrityError, transaction
 from django.db.models import F
+import uuid
+import logging
+from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP
+from django.conf import settings
+from django.shortcuts import redirect
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter
+from transbank.common.integration_api_keys import IntegrationApiKeys
+from transbank.common.integration_commerce_codes import IntegrationCommerceCodes
+from transbank.common.integration_type import IntegrationType
+from transbank.common.options import WebpayOptions
+from transbank.webpay.webpay_plus.transaction import Transaction as WebpayTransaction
+from transbank.error.transbank_error import TransbankError
 from .filters import MaquinariaFilter
 from .models import Maquinaria, Carro, ItemCarro, Contrato, DetalleContrato
+
+logger = logging.getLogger(__name__)
+
+
+def _webpay_transaction():
+    """Crea el cliente Webpay con credenciales públicas de integración de Transbank."""
+    options = WebpayOptions(
+        IntegrationCommerceCodes.WEBPAY_PLUS,
+        IntegrationApiKeys.WEBPAY,
+        IntegrationType.TEST,
+        timeout=30,
+    )
+    return WebpayTransaction(options)
+
+
+def _webpay_amount(contrato):
+    """Webpay recibe el monto en pesos como entero."""
+    return int(Decimal(contrato.total).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+
+def _webpay_buy_order(contrato):
+    return f"TW{contrato.pk}-{contrato.codigo_uuid.hex[:12]}"
+
+
+def _release_webpay_attempt(contrato, token):
+    Contrato.objects.filter(pk=contrato.pk, webpay_token=token).update(
+        webpay_token='', webpay_url='', webpay_token_created_at=None
+    )
 from .serializers import MaquinariaSerializer, CarroSerializer, ItemCarroSerializer, ContratoSerializer, RegistroSerializer
 
 class IsEjecutivo(permissions.BasePermission):
@@ -139,9 +182,60 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
                     subtotal=item.costo_calculado
                 )
             
-            # El stock se descuenta cuando el Ejecutivo registra el pago.
+            # La solicitud queda pendiente y no reserva stock hasta el pago demo.
             carro.items.all().delete()
             return Response(ContratoSerializer(contrato).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='pago-demo', permission_classes=[IsCliente])
+    def pago_demo(self, request, pk=None):
+        """Inicia un pago Webpay Plus en el ambiente de integración."""
+        contrato = self.get_object()
+        return_url = getattr(settings, 'WEBPAY_RETURN_URL', '') or request.build_absolute_uri(
+            reverse('webpay-return')
+        )
+        # El bloqueo de contrato evita que dos clics creen sesiones Webpay distintas.
+        with transaction.atomic():
+            contrato = Contrato.objects.select_for_update().get(pk=contrato.pk)
+            if contrato.estado != 'APROBADO':
+                return Response(
+                    {"error": "El ejecutivo debe aprobar el arriendo antes del pago."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if (contrato.webpay_token and contrato.webpay_url and contrato.webpay_token_created_at
+                    and contrato.webpay_token_created_at > timezone.now() - timedelta(minutes=15)):
+                return Response({"url": contrato.webpay_url, "token": contrato.webpay_token})
+            try:
+                response = _webpay_transaction().create(
+                    _webpay_buy_order(contrato),
+                    str(contrato.codigo_uuid),
+                    _webpay_amount(contrato),
+                    return_url,
+                )
+            except TransbankError:
+                logger.exception('Transbank rechazó la creación del pago para contrato %s', contrato.pk)
+                return Response(
+                    {"error": "Webpay no pudo iniciar el pago. Intenta nuevamente en unos minutos."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            except Exception:
+                logger.exception('No se pudo iniciar el pago Webpay para contrato %s', contrato.pk)
+                return Response(
+                    {"error": "No se pudo conectar con Webpay. Intenta nuevamente en unos minutos."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            if (not response.get('token') or not response.get('url')
+                    or not response['url'].startswith('https://webpay3gint.transbank.cl/')):
+                logger.error('Transbank devolvió una respuesta incompleta al iniciar contrato %s', contrato.pk)
+                return Response(
+                    {"error": "Webpay devolvió una respuesta incompleta."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            contrato.webpay_token = response['token']
+            contrato.webpay_url = response['url']
+            contrato.webpay_token_created_at = timezone.now()
+            contrato.save(update_fields=['webpay_token', 'webpay_url', 'webpay_token_created_at'])
+
+        return Response({"url": response['url'], "token": response['token']})
 
     @action(detail=True, methods=['patch'], permission_classes=[IsEjecutivo])
     def estado(self, request, pk=None):
@@ -152,8 +246,23 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         with transaction.atomic():
             # El bloqueo evita ejecutar dos veces una transición concurrente.
             contrato = Contrato.objects.select_for_update().get(pk=contrato.pk)
+            if contrato.estado == 'APROBADO' and contrato.webpay_token:
+                intento_activo = (
+                    contrato.webpay_token_created_at
+                    and contrato.webpay_token_created_at > timezone.now() - timedelta(minutes=15)
+                )
+                if nuevo_estado == 'CANCELADO' and intento_activo:
+                    return Response(
+                        {"error": "Hay un pago Webpay en curso. Espera a que termine antes de cancelar."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if not intento_activo:
+                    contrato.webpay_token = ''
+                    contrato.webpay_url = ''
+                    contrato.webpay_token_created_at = None
             estados_permitidos = {
-                'PENDIENTE': {'PAGADO', 'CANCELADO'},
+                'PENDIENTE': {'APROBADO', 'CANCELADO'},
+                'APROBADO': {'CANCELADO'},
                 'PAGADO': {'ENTREGADO', 'CANCELADO'},
                 'ENTREGADO': {'COMPLETADO', 'CANCELADO'},
             }
@@ -162,36 +271,8 @@ class ContratoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             detalles = list(contrato.detalles.select_related('maquinaria').order_by('maquinaria_id'))
             ids = sorted({d.maquinaria_id for d in detalles if d.maquinaria_id})
             maquinarias = {m.id: m for m in Maquinaria.objects.select_for_update().filter(id__in=ids).order_by('id')}
-            # Solo la transición a PAGADO descuenta unidades del inventario.
-            if nuevo_estado == 'PAGADO':
-                requeridas = {}
-                for detalle in detalles:
-                    if detalle.maquinaria_id:
-                        requeridas[detalle.maquinaria_id] = requeridas.get(detalle.maquinaria_id, 0) + 1
-                for maquina_id, cantidad in requeridas.items():
-                    if maquinarias[maquina_id].stock_disponible < cantidad:
-                        return Response({"error": f"Stock insuficiente para {maquinarias[maquina_id].nombre}."}, status=status.HTTP_400_BAD_REQUEST)
-                    # La validación combina stock libre y reservas con fechas solapadas.
-                    contratos_activos = DetalleContrato.objects.filter(
-                        maquinaria_id=maquina_id, contrato__estado__in=['PAGADO', 'ENTREGADO']
-                    )
-                    unidades_fisicas = maquinarias[maquina_id].stock_disponible + contratos_activos.count()
-                    nuevos = [d for d in detalles if d.maquinaria_id == maquina_id]
-                    for detalle in nuevos:
-                        ocupadas_en_periodo = contratos_activos.filter(
-                            fecha_inicio__lt=detalle.fecha_fin, fecha_fin__gt=detalle.fecha_inicio
-                        ).count()
-                        nuevas_en_periodo = sum(
-                            1 for otro in nuevos
-                            if otro.fecha_inicio < detalle.fecha_fin and otro.fecha_fin > detalle.fecha_inicio
-                        )
-                        if ocupadas_en_periodo + nuevas_en_periodo > unidades_fisicas:
-                            return Response({"error": f"No hay unidades de {maquinarias[maquina_id].nombre} disponibles para las fechas solicitadas."}, status=status.HTTP_400_BAD_REQUEST)
-                for maquina_id, cantidad in requeridas.items():
-                    Maquinaria.objects.filter(pk=maquina_id).update(stock_disponible=F('stock_disponible') - cantidad)
-
-            # Cancelar o completar devuelve las unidades previamente descontadas.
-            elif nuevo_estado in ['CANCELADO', 'COMPLETADO'] and contrato.estado in ['PAGADO', 'ENTREGADO']:
+            # Cancelar o completar devuelve las unidades descontadas al pagar.
+            if nuevo_estado in ['CANCELADO', 'COMPLETADO'] and contrato.estado in ['PAGADO', 'ENTREGADO']:
                 for maquina_id in ids:
                     cantidad = sum(1 for d in detalles if d.maquinaria_id == maquina_id)
                     Maquinaria.objects.filter(pk=maquina_id).update(stock_disponible=F('stock_disponible') + cantidad)
@@ -212,3 +293,111 @@ class RegistroViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
         usuario = serializer.save()
         return Response({"id": usuario.id, "username": usuario.username, "email": usuario.email}, status=status.HTTP_201_CREATED)
+
+
+def _complete_webpay_payment(contrato, token, result):
+    """Valida la respuesta de Transbank y descuenta inventario una sola vez."""
+    try:
+        response_code = int(result.get('response_code', -1))
+        response_amount = int(Decimal(str(result.get('amount', 0))))
+    except (ValueError, TypeError, ArithmeticError):
+        response_code = -1
+        response_amount = -1
+    if (result.get('status') != 'AUTHORIZED'
+            or response_code != 0
+            or result.get('buy_order') != _webpay_buy_order(contrato)
+            or response_amount != _webpay_amount(contrato)):
+        _release_webpay_attempt(contrato, token)
+        return 'rechazado'
+
+    with transaction.atomic():
+        contrato = Contrato.objects.select_for_update().get(pk=contrato.pk)
+        if contrato.webpay_token != token or contrato.estado != 'APROBADO':
+            return 'invalido'
+
+        detalles = list(contrato.detalles.select_related('maquinaria').order_by('maquinaria_id'))
+        if not detalles or any(detalle.maquinaria_id is None for detalle in detalles):
+            return 'sin_stock'
+
+        ids = sorted({detalle.maquinaria_id for detalle in detalles})
+        maquinarias = {
+            maquinaria.id: maquinaria
+            for maquinaria in Maquinaria.objects.select_for_update().filter(id__in=ids).order_by('id')
+        }
+        requeridas = {}
+        for detalle in detalles:
+            requeridas[detalle.maquinaria_id] = requeridas.get(detalle.maquinaria_id, 0) + 1
+
+        for maquinaria_id, cantidad in requeridas.items():
+            maquinaria = maquinarias.get(maquinaria_id)
+            if not maquinaria or maquinaria.stock_disponible < cantidad:
+                return 'sin_stock'
+
+            activos = DetalleContrato.objects.filter(
+                maquinaria_id=maquinaria_id,
+                contrato__estado__in=['PAGADO', 'ENTREGADO'],
+            )
+            unidades_fisicas = maquinaria.stock_disponible + activos.count()
+            solicitados = [detalle for detalle in detalles if detalle.maquinaria_id == maquinaria_id]
+            for detalle in solicitados:
+                ocupadas = activos.filter(
+                    fecha_inicio__lt=detalle.fecha_fin,
+                    fecha_fin__gt=detalle.fecha_inicio,
+                ).count()
+                nuevas = sum(
+                    1 for otro in solicitados
+                    if otro.fecha_inicio < detalle.fecha_fin and otro.fecha_fin > detalle.fecha_inicio
+                )
+                if ocupadas + nuevas > unidades_fisicas:
+                    return 'sin_stock'
+
+        for maquinaria_id, cantidad in requeridas.items():
+            Maquinaria.objects.filter(pk=maquinaria_id).update(stock_disponible=F('stock_disponible') - cantidad)
+
+        contrato.estado = 'PAGADO'
+        contrato.referencia_pago = f"WEBPAY-{result.get('authorization_code', 'OK')}"
+        contrato.webpay_token = ''
+        contrato.webpay_url = ''
+        contrato.webpay_token_created_at = None
+        contrato.save(update_fields=[
+            'estado', 'referencia_pago', 'webpay_token', 'webpay_url', 'webpay_token_created_at'
+        ])
+    return 'exitoso'
+
+
+@csrf_exempt
+def webpay_return(request):
+    """Recibe el retorno de Webpay y confirma el pago directamente con Transbank."""
+    token = request.POST.get('token_ws') or request.GET.get('token_ws')
+    if not token:
+        aborted_token = request.POST.get('TBK_TOKEN') or request.GET.get('TBK_TOKEN')
+        if aborted_token:
+            contrato = Contrato.objects.filter(webpay_token=aborted_token).first()
+            if contrato:
+                _release_webpay_attempt(contrato, aborted_token)
+            return redirect('/?pago=cancelado#mis-arriendos')
+        return redirect('/?pago=error#mis-arriendos')
+
+    contrato = Contrato.objects.filter(webpay_token=token).first()
+    if not contrato:
+        return redirect('/?pago=error#mis-arriendos')
+
+    try:
+        result = _webpay_transaction().commit(token)
+    except TransbankError:
+        logger.exception('Transbank no pudo confirmar el pago del contrato %s', contrato.pk)
+        return redirect('/?pago=error#mis-arriendos')
+    except Exception:
+        logger.exception('Falló la confirmación Webpay del contrato %s', contrato.pk)
+        return redirect('/?pago=error#mis-arriendos')
+
+    outcome = _complete_webpay_payment(contrato, token, result)
+    if outcome in ('sin_stock', 'invalido'):
+        try:
+            _webpay_transaction().refund(token, _webpay_amount(contrato))
+            _release_webpay_attempt(contrato, token)
+            outcome = 'sin_stock' if outcome == 'sin_stock' else 'invalido'
+        except Exception:
+            logger.exception('No se pudo revertir un pago autorizado sin stock para contrato %s', contrato.pk)
+            outcome = 'error'
+    return redirect(f'/?pago={outcome}#mis-arriendos')

@@ -99,5 +99,5 @@ class ContratoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Contrato
-        fields = ['id', 'codigo_uuid', 'cliente', 'cliente_email', 'estado', 'fecha_creacion', 'total', 'detalles']
+        fields = ['id', 'codigo_uuid', 'cliente', 'cliente_email', 'estado', 'fecha_creacion', 'total', 'referencia_pago', 'detalles']
         read_only_fields = fields

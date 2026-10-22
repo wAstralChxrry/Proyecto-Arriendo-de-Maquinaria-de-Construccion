@@ -234,11 +234,19 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
         contrato = self.crear_contrato()
         self.api.force_authenticate(user=self.ejecutivo)
 
-        paid = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'PAGADO'}, format='json')
+        approved = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'APROBADO'}, format='json')
+        self.assertEqual(approved.status_code, 200)
+        self.assertEqual(approved.data['estado'], 'APROBADO')
+        self.assertEqual(self.maquinaria.stock_disponible, 2)
+
+        self.api.force_authenticate(user=self.cliente)
+        paid = self.api.post(f'/api/contratos/{contrato.id}/pago-demo/', {}, format='json')
         self.assertEqual(paid.status_code, 200)
+        self.assertTrue(paid.data['referencia_pago'].startswith('WEBPAY-DEMO-'))
         self.maquinaria.refresh_from_db()
         self.assertEqual(self.maquinaria.stock_disponible, 1)
 
+        self.api.force_authenticate(user=self.ejecutivo)
         delivered = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'ENTREGADO'}, format='json')
         self.assertEqual(delivered.status_code, 200)
         completed = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'COMPLETADO'}, format='json')
@@ -250,7 +258,10 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
         contrato = self.crear_contrato()
         self.api.force_authenticate(user=self.ejecutivo)
 
-        paid = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'PAGADO'}, format='json')
+        self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'APROBADO'}, format='json')
+        self.api.force_authenticate(user=self.cliente)
+        paid = self.api.post(f'/api/contratos/{contrato.id}/pago-demo/', {}, format='json')
+        self.api.force_authenticate(user=self.ejecutivo)
         cancelled = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'CANCELADO'}, format='json')
 
         self.assertEqual(paid.status_code, 200)
@@ -260,14 +271,18 @@ class CheckoutAndInventoryTests(BaseApiTestCase):
 
     def test_insufficient_stock_rejects_payment_without_changing_contract(self):
         contrato = self.crear_contrato()
-        Maquinaria.objects.filter(pk=self.maquinaria.pk).update(stock_disponible=0)
         self.api.force_authenticate(user=self.ejecutivo)
+        approved = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'APROBADO'}, format='json')
+        Maquinaria.objects.filter(pk=self.maquinaria.pk).update(stock_disponible=0)
+        self.api.force_authenticate(user=self.cliente)
 
-        response = self.api.patch(f'/api/contratos/{contrato.id}/estado/', {'estado': 'PAGADO'}, format='json')
+        response = self.api.post(f'/api/contratos/{contrato.id}/pago-demo/', {}, format='json')
 
+        self.assertEqual(approved.status_code, 200)
         self.assertEqual(response.status_code, 400)
         contrato.refresh_from_db()
-        self.assertEqual(contrato.estado, 'PENDIENTE')
+        self.assertEqual(contrato.estado, 'APROBADO')
+        self.assertEqual(contrato.referencia_pago, '')
         self.assertEqual(Maquinaria.objects.get(pk=self.maquinaria.pk).stock_disponible, 0)
 
     def test_invalid_transition_is_rejected(self):
